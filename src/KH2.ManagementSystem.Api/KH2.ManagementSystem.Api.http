@@ -1,0 +1,10 @@
+@KH2.ManagementSystem.Api_HostAddress = https://localhost:7001
+
+GET {{KH2.ManagementSystem.Api_HostAddress}}/health
+
+###
+
+GET {{KH2.ManagementSystem.Api_HostAddress}}/api/v1/system/info
+Accept: application/json
+
+###

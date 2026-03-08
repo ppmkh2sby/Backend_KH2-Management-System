@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KH2.ManagementSystem.Application\KH2.ManagementSystem.Application.csproj" />
+    <ProjectReference Include="..\KH2.ManagementSystem.Infrastructure\KH2.ManagementSystem.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

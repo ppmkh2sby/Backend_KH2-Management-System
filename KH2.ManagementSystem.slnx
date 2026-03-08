@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/KH2.ManagementSystem.Api/KH2.ManagementSystem.Api.csproj" />
+    <Project Path="src/KH2.ManagementSystem.Application/KH2.ManagementSystem.Application.csproj" />
+    <Project Path="src/KH2.ManagementSystem.Domain/KH2.ManagementSystem.Domain.csproj" />
+    <Project Path="src/KH2.ManagementSystem.Infrastructure/KH2.ManagementSystem.Infrastructure.csproj" />
+    <Project Path="src/KH2.ManagementSystem.Shared/KH2.ManagementSystem.Shared.csproj" />
+  </Folder>
+</Solution>

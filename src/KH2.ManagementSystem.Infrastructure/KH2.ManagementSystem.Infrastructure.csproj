@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KH2.ManagementSystem.Application\KH2.ManagementSystem.Application.csproj" />
+    <ProjectReference Include="..\KH2.ManagementSystem.Domain\KH2.ManagementSystem.Domain.csproj" />
+    <ProjectReference Include="..\KH2.ManagementSystem.Shared\KH2.ManagementSystem.Shared.csproj" />
+  </ItemGroup>
+</Project>

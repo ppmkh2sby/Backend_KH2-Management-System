@@ -39,4 +39,10 @@ public sealed class User : AuditableEntity<Guid>
         Email = email.Trim();
         Touch(DateTimeOffset.UtcNow);
     }
+
+    public void ChangeRole(UserRole role)
+    {
+        Role = role;
+        Touch(DateTimeOffset.UtcNow);
+    }
 }

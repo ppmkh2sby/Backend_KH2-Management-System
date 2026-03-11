@@ -15,14 +15,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK from global.json
+      uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 8.0.x
+        global-json-file: global.json
+        
+    - name: Show .NET info
+      run: dotnet --info
+
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore KH2.ManagementSystem.slnx
+
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build KH2.ManagementSystem.slnx --configuration Release --no-restore
+
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test KH2.ManagementSystem.slnx --configuration Release --no-build --verbosity normal

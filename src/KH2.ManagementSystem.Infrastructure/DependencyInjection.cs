@@ -1,6 +1,7 @@
 using System.Text;
 using System.Security.Claims;
 using KH2.ManagementSystem.Application.Abstractions.Authentication;
+using KH2.ManagementSystem.Infrastructure.Persistence.Seed;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
@@ -56,6 +57,11 @@ public static class DependencyInjection
         services.AddOptions<DevelopmentAuthOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthOptions.SectionName));
 
+        var developmentAuthOptions = configuration
+            .GetSection(DevelopmentAuthOptions.SectionName)
+            .Get<DevelopmentAuthOptions>()
+            ?? new DevelopmentAuthOptions();
+
         services.AddOptions<DevelopmentAuthorizationOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthorizationOptions.SectionName));
 
@@ -91,12 +97,21 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString);
         });
 
-        services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
-        services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
         services.AddScoped<ISantriAccessReader, DevelopmentSantriAccessReader>();
         services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
+        if (developmentAuthOptions.Enabled)
+        {
+            services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
+        }
+        else
+        {
+            services.AddScoped<IUserAuthenticator, DbUserAuthenticator>();
+        }
+
+        services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
         services.AddScoped<IPasswordHasher, AspNetPasswordHasher>();
-        services.AddScoped<IUserAuthenticator, DbUserAuthenticator>();
+        services.AddScoped<IEmailVerificationCodeService, EmailVerificationCodeService>();
+        services.AddScoped<MasterAccountSeeder>();
         services.AddSingleton<IClock, SystemClock>();
 
         return services;

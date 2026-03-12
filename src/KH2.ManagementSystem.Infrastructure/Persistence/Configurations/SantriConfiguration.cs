@@ -26,6 +26,29 @@ public sealed class SantriConfiguration : IEntityTypeConfiguration<Santri>
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(x => x.Kampus)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(x => x.Jurusan)
+            .HasMaxLength(200)
+            .IsRequired();
+
+        builder.Property(x => x.Gender)
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(x => x.Tim)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(x => x.Kelas)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(x => x.Catatan)
+            .HasMaxLength(500);
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 

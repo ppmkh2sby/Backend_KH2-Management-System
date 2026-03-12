@@ -8,7 +8,7 @@ public sealed class DevelopmentUserAuthenticator(
     : IUserAuthenticator
 {
     public Task<AuthenticatedUser?> AuthenticateAsync(
-        string email,
+        string identity,
         string password,
         CancellationToken cancellationToken = default)
     {
@@ -20,7 +20,11 @@ public sealed class DevelopmentUserAuthenticator(
         }
 
         var matchedUser = authOptions.Users.FirstOrDefault(user =>
-            string.Equals(user.Email, email.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            (
+                string.Equals(user.Email, identity.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(user.Username) &&
+                 string.Equals(user.Username, identity.Trim(), StringComparison.OrdinalIgnoreCase))
+            ) &&
             user.Password == password);
 
         if (matchedUser is null)
@@ -28,11 +32,19 @@ public sealed class DevelopmentUserAuthenticator(
             return Task.FromResult<AuthenticatedUser?>(null);
         }
 
+        var username = string.IsNullOrWhiteSpace(matchedUser.Username)
+            ? matchedUser.Email
+            : matchedUser.Username;
+
         var authenticatedUser = new AuthenticatedUser(
             matchedUser.UserId,
+            username,
             matchedUser.FullName,
             matchedUser.Email,
-            matchedUser.Role);
+            matchedUser.Role,
+            EmailConfirmed: true,
+            MustChangePassword: false,
+            IsActive: true);
 
         return Task.FromResult<AuthenticatedUser?>(authenticatedUser);
     }

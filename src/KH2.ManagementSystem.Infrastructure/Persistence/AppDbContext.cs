@@ -17,6 +17,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<Santri> Santris => Set<Santri>();
     public DbSet<WaliSantriRelation> WaliSantriRelations => Set<WaliSantriRelation>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -15,13 +15,17 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.Id)
             .ValueGeneratedNever();
 
+        builder.Property(x => x.Username)
+            .HasMaxLength(100)
+            .IsRequired();
+
         builder.Property(x => x.FullName)
             .HasMaxLength(200)
             .IsRequired();
 
         builder.Property(x => x.Email)
             .HasMaxLength(200)
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(x => x.Role)
             .HasConversion<string>()
@@ -32,10 +36,22 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(500)
             .IsRequired();
 
+        builder.Property(x => x.EmailConfirmed)
+            .IsRequired();
+
+        builder.Property(x => x.IsActive)
+            .IsRequired();
+
+        builder.Property(x => x.MustChangePassword)
+            .IsRequired();
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 
         builder.Property(x => x.UpdatedAtUtc);
+
+        builder.HasIndex(x => x.Username)
+            .IsUnique();
 
         builder.HasIndex(x => x.Email)
             .IsUnique();

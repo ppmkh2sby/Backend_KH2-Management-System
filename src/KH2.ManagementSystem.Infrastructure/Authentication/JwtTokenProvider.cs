@@ -23,13 +23,20 @@ public sealed class JwtTokenProvider(
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.FullName),
+            new Claim("username", user.Username),
 
             new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
             new Claim(ClaimTypes.Name, user.FullName),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
+            new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim("email_confirmed", user.EmailConfirmed.ToString().ToLowerInvariant()),
+            new Claim("must_change_password", user.MustChangePassword.ToString().ToLowerInvariant()),
+            new Claim("is_active", user.IsActive.ToString().ToLowerInvariant())
+        };
+
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            claims = claims.Append(new Claim(ClaimTypes.Email, user.Email)).ToArray();
         };
 
         var signingKey = new SymmetricSecurityKey(

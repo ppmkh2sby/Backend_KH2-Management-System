@@ -8,37 +8,43 @@ public sealed class Santri : AuditableEntity<Guid>
         Guid id,
         Guid userId,
         string fullName,
-        string nis)
+        string nis,
+        string kampus,
+        string jurusan,
+        string gender,
+        string tim,
+        string kelas,
+        string? catatan = null)
         : base(id)
     {
         UserId = userId;
-        Rename(fullName);
-        ChangeNis(nis);
+        FullName = Require(fullName, nameof(fullName));
+        Nis = Require(nis, nameof(nis));
+        Kampus = Require(kampus, nameof(kampus));
+        Jurusan = Require(jurusan, nameof(jurusan));
+        Gender = Require(gender, nameof(gender));
+        Tim = Require(tim, nameof(tim));
+        Kelas = Require(kelas, nameof(kelas));
+        Catatan = catatan?.Trim();
     }
 
     public Guid UserId { get; private set; }
     public string FullName { get; private set; } = string.Empty;
     public string Nis { get; private set; } = string.Empty;
+    public string Kampus { get; private set; } = string.Empty;
+    public string Jurusan { get; private set; } = string.Empty;
+    public string Gender { get; private set; } = string.Empty;
+    public string Tim { get; private set; } = string.Empty;
+    public string Kelas { get; private set; } = string.Empty;
+    public string? Catatan { get; private set; }
 
-    public void Rename(string fullName)
+    private static string Require(string value, string paramName)
     {
-        if (string.IsNullOrWhiteSpace(fullName))
+        if (string.IsNullOrWhiteSpace(value))
         {
-            throw new ArgumentException("Santri full name is required.", nameof(fullName));
+            throw new ArgumentException($"{paramName} is required.", paramName);
         }
 
-        FullName = fullName.Trim();
-        Touch(DateTimeOffset.UtcNow);
-    }
-
-    public void ChangeNis(string nis)
-    {
-        if (string.IsNullOrWhiteSpace(nis))
-        {
-            throw new ArgumentException("Santri NIS is required.", nameof(nis));
-        }
-
-        Nis = nis.Trim();
-        Touch(DateTimeOffset.UtcNow);
+        return value.Trim();
     }
 }

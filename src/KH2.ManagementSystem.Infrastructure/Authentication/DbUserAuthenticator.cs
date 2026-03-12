@@ -11,18 +11,20 @@ public sealed class DbUserAuthenticator(
     : IUserAuthenticator
 {
     public async Task<AuthenticatedUser?> AuthenticateAsync(
-        string email,
+        string identity,
         string password,
         CancellationToken cancellationToken = default)
     {
-        var normalizedEmail = email.Trim();
+        var normalizedIdentity = identity.Trim();
+        var normalizedEmail = normalizedIdentity.ToLowerInvariant();
 
         var user = await dbContext.Users
             .FirstOrDefaultAsync(
-                x => x.Email == normalizedEmail,
+                x => x.Username == normalizedIdentity ||
+                     (x.Email != null && x.Email == normalizedEmail),
                 cancellationToken);
 
-        if (user is null)
+        if (user is null || !user.IsActive)
         {
             return null;
         }
@@ -39,8 +41,12 @@ public sealed class DbUserAuthenticator(
 
         return new AuthenticatedUser(
             user.Id,
+            user.Username,
             user.FullName,
             user.Email,
-            user.Role);
+            user.Role,
+            user.EmailConfirmed,
+            user.MustChangePassword,
+            user.IsActive);
     }
 }

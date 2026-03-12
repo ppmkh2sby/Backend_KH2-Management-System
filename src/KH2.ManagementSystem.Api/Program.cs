@@ -1,11 +1,14 @@
 using KH2.ManagementSystem.Api.Options;
 using KH2.ManagementSystem.Application.Abstractions.Messaging;
 using KH2.ManagementSystem.Application.Features.System.GetSystemOverview;
+using KH2.ManagementSystem.Infrastructure.Persistence.Seed;
 using KH2.ManagementSystem.BuildingBlocks.Results;
 using KH2.ManagementSystem.Infrastructure;
 using KH2.ManagementSystem.Infrastructure.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Domain.Users;
+using KH2.ManagementSystem.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +52,8 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+await InitializeDatabaseAsync(app);
+
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
 
@@ -68,6 +73,17 @@ app.MapControllers();
 
 app.Run();
 
+static async Task InitializeDatabaseAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.MigrateAsync();
+
+    var seeder = scope.ServiceProvider.GetRequiredService<MasterAccountSeeder>();
+    await seeder.SeedAsync();
+}
+
 public partial class Program
 {
     internal static readonly string[] RootEndpoints =
@@ -75,6 +91,10 @@ public partial class Program
         "/health",
         "/api/v1/system/info",
         "/api/v1/auth/login",
-        "/api/v1/auth/me"
+        "/api/v1/auth/me",
+        "/api/v1/auth/change-password",
+        "/api/v1/auth/set-email",
+        "/api/v1/auth/verify-email",
+        "/api/v1/auth/logout"
     ];
 }

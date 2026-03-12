@@ -6,7 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="..\KH2.ManagementSystem.Application\KH2.ManagementSystem.Application.csproj" />
     <ProjectReference Include="..\KH2.ManagementSystem.Infrastructure\KH2.ManagementSystem.Infrastructure.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.4" />
   </ItemGroup>
 </Project>

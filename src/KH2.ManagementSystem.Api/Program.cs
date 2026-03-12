@@ -27,6 +27,20 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/", () => Results.Ok(new
+{
+    status = "running",
+    application = "KH2 Management System API",
+    endpoints = new[]
+    {
+        "/health",
+        "/api/v1/system/info",
+        "/api/v1/auth/login",
+        "/api/v1/auth/me"
+    }
+}));
+
+app.MapGet("/scalar", () => Results.Redirect("/"));
 app.MapHealthChecks("/health");
 app.MapControllers();
 

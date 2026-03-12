@@ -1,4 +1,6 @@
 using System.Text;
+using System.Security.Claims;
+using KH2.ManagementSystem.Application.Abstractions.Authentication;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
@@ -44,6 +46,9 @@ public static class DependencyInjection
             .Get<JwtOptions>()
             ?? throw new InvalidOperationException("JWT configuration is missing.");
 
+        services.AddOptions<DevelopmentAuthOptions>()
+            .Bind(configuration.GetSection(DevelopmentAuthOptions.SectionName));
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -61,9 +66,15 @@ public static class DependencyInjection
                         Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
 
                     ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
+                    ClockSkew = TimeSpan.Zero,
+
+                    NameClaimType = ClaimTypes.Name,
+                    RoleClaimType = ClaimTypes.Role
                 };
             });
+
+        services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
+        services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
 
         services.AddSingleton<IClock, SystemClock>();
 

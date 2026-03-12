@@ -4,19 +4,24 @@ namespace KH2.ManagementSystem.Domain.Users;
 
 public sealed class User : AuditableEntity<Guid>
 {
-    public User(Guid id, string fullName, string email, UserRole role)
+    public User(
+        Guid id,
+        string fullName,
+        string email,
+        UserRole role,
+        string passwordHash)
         : base(id)
     {
         Rename(fullName);
         ChangeEmail(email);
-        Role = role;
+        ChangeRole(role);
+        SetPasswordHash(passwordHash);
     }
 
     public string FullName { get; private set; } = string.Empty;
-
     public string Email { get; private set; } = string.Empty;
-
     public UserRole Role { get; private set; }
+    public string PasswordHash { get; private set; } = string.Empty;
 
     public void Rename(string fullName)
     {
@@ -43,6 +48,17 @@ public sealed class User : AuditableEntity<Guid>
     public void ChangeRole(UserRole role)
     {
         Role = role;
+        Touch(DateTimeOffset.UtcNow);
+    }
+
+    public void SetPasswordHash(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash))
+        {
+            throw new ArgumentException("Password hash is required.", nameof(passwordHash));
+        }
+
+        PasswordHash = passwordHash.Trim();
         Touch(DateTimeOffset.UtcNow);
     }
 }

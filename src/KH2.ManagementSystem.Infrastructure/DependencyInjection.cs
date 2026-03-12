@@ -7,6 +7,8 @@ using KH2.ManagementSystem.Infrastructure.Time;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Infrastructure.Authorization;
 using KH2.ManagementSystem.Infrastructure.Persistence;
+using KH2.ManagementSystem.Application.Abstractions.Security;
+using KH2.ManagementSystem.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -93,6 +95,8 @@ public static class DependencyInjection
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
         services.AddScoped<ISantriAccessReader, DevelopmentSantriAccessReader>();
         services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
+        services.AddScoped<IPasswordHasher, AspNetPasswordHasher>();
+        services.AddScoped<IUserAuthenticator, DbUserAuthenticator>();
         services.AddSingleton<IClock, SystemClock>();
 
         return services;

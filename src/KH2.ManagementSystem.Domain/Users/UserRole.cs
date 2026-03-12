@@ -6,5 +6,5 @@ public enum UserRole
     DewanGuru = 2,
     Pengurus = 3,
     Santri = 4,
-    WaltiSantri = 5
+    WaliSantri = 5
 }

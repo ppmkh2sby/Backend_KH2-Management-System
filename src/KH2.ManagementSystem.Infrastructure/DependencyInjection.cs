@@ -4,6 +4,8 @@ using KH2.ManagementSystem.Application.Abstractions.Authentication;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
+using KH2.ManagementSystem.Infrastructure.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +50,11 @@ public static class DependencyInjection
 
         services.AddOptions<DevelopmentAuthOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthOptions.SectionName));
+
+        services.AddOptions<DevelopmentAuthorizationOptions>()
+            .Bind(configuration.GetSection(DevelopmentAuthorizationOptions.SectionName));
+
+        services.AddSingleton<IAuthorizationHandler, CanAccessSantriHandler>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>

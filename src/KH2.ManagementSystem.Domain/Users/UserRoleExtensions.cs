@@ -12,5 +12,5 @@ public static class UserRoleExtensions
         role is UserRole.Admin or UserRole.DewanGuru or UserRole.Pengurus;
 
     public static bool IsSantriSide(this UserRole role) =>
-        role is UserRole.Santri or UserRole.WaltiSantri;
+        role is UserRole.Santri or UserRole.WaliSantri;
 }

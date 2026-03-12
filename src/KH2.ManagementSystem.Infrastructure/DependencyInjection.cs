@@ -5,8 +5,9 @@ using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
-
 using KH2.ManagementSystem.Infrastructure.Authorization;
+using KH2.ManagementSystem.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
@@ -81,6 +82,14 @@ public static class DependencyInjection
                     RoleClaimType = ClaimTypes.Role
                 };
             });
+
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
+
+        services.AddDbContext<AppDbContext>(options =>
+        {
+            options.UseNpgsql(connectionString);
+        });
 
         services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();

@@ -31,13 +31,7 @@ app.MapGet("/", () => Results.Ok(new
 {
     status = "running",
     application = "KH2 Management System API",
-    endpoints = new[]
-    {
-        "/health",
-        "/api/v1/system/info",
-        "/api/v1/auth/login",
-        "/api/v1/auth/me"
-    }
+    endpoints = Program.RootEndpoints
 }));
 
 app.MapGet("/scalar", () => Results.Redirect("/"));
@@ -46,4 +40,13 @@ app.MapControllers();
 
 app.Run();
 
-public partial class Program;
+public partial class Program
+{
+    internal static readonly string[] RootEndpoints =
+    [
+        "/health",
+        "/api/v1/system/info",
+        "/api/v1/auth/login",
+        "/api/v1/auth/me"
+    ];
+}

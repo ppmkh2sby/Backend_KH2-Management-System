@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Local application configuration
+src/KH2.ManagementSystem.Api/appsettings.json
+src/KH2.ManagementSystem.Api/appsettings.Development.json
+
 # User-specific files
 *.rsuser
 *.suo

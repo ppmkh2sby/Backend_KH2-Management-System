@@ -1,3 +1,4 @@
+using KH2.ManagementSystem.Domain.Auth;
 using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Domain.Walis;
@@ -15,6 +16,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Santri> Santris => Set<Santri>();
     public DbSet<WaliSantriRelation> WaliSantriRelations => Set<WaliSantriRelation>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,15 +1,15 @@
 using System.Security.Claims;
+using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Domain.Users;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Options;
 
 namespace KH2.ManagementSystem.Infrastructure.Authorization;
 
 public sealed class CanAccessSantriHandler(
-    IOptions<DevelopmentAuthorizationOptions> options)
+    ISantriAccessReader santriAccessReader)
     : AuthorizationHandler<CanAccessSantriRequirement, SantriAccessResource>
 {
-    protected override Task HandleRequirementAsync(
+    protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         CanAccessSantriRequirement requirement,
         SantriAccessResource resource)
@@ -19,51 +19,40 @@ public sealed class CanAccessSantriHandler(
 
         if (!Guid.TryParse(userIdValue, out var userId))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         if (!Enum.TryParse<UserRole>(roleValue, ignoreCase: true, out var role))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         if (role is UserRole.Admin or UserRole.DewanGuru or UserRole.Pengurus)
         {
             context.Succeed(requirement);
-            return Task.CompletedTask;
-        }
-
-        var authzOptions = options.Value;
-
-        if (!authzOptions.Enabled)
-        {
-            return Task.CompletedTask;
+            return;
         }
 
         if (role == UserRole.Santri)
         {
-            var ownedSantri = authzOptions.SantriOwnerships
-                .FirstOrDefault(x => x.UserId == userId);
+            var isOwner = await santriAccessReader.IsSantriOwnerAsync(userId, resource.SantriId);
 
-            if (ownedSantri is not null && ownedSantri.SantriId == resource.SantriId)
+            if (isOwner)
             {
                 context.Succeed(requirement);
             }
 
-            return Task.CompletedTask;
+            return;
         }
 
         if (role == UserRole.WaliSantri)
         {
-            var waliRelation = authzOptions.WaliSantriRelations
-                .FirstOrDefault(x => x.WaliUserId == userId);
+            var isRelatedWali = await santriAccessReader.IsWaliOfSantriAsync(userId, resource.SantriId);
 
-            if (waliRelation is not null && waliRelation.SantriIds.Contains(resource.SantriId))
+            if (isRelatedWali)
             {
                 context.Succeed(requirement);
             }
         }
-
-        return Task.CompletedTask;
     }
 }

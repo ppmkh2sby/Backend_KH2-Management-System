@@ -4,6 +4,8 @@ using KH2.ManagementSystem.Application.Abstractions.Authentication;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
+using KH2.ManagementSystem.Application.Abstractions.Authorization;
+
 using KH2.ManagementSystem.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -82,7 +84,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
-
+        services.AddScoped<ISantriAccessReader, DevelopmentSantriAccessReader>();
         services.AddSingleton<IClock, SystemClock>();
 
         return services;

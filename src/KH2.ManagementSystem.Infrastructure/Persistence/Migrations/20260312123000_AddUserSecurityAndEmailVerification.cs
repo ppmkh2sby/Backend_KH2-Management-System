@@ -11,6 +11,8 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
     [Migration("20260312123000_AddUserSecurityAndEmailVerification")]
     public partial class AddUserSecurityAndEmailVerification : Migration
     {
+        private static readonly string[] UserEmailColumns = ["UserId", "Email"];
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
@@ -136,7 +138,7 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_EmailVerificationCodes_UserId_Email",
                 table: "EmailVerificationCodes",
-                columns: new[] { "UserId", "Email" });
+                columns: UserEmailColumns);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Username",

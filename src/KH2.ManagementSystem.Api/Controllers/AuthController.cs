@@ -28,8 +28,19 @@ public sealed class AuthController(
         [FromBody] LoginRequest request,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.ResolvedIdentity) ||
+            string.IsNullOrWhiteSpace(request.Password))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Login failed.",
+                Detail = "Identity and password are required.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         var user = await authenticator.AuthenticateAsync(
-            request.Identity,
+            request.ResolvedIdentity,
             request.Password,
             cancellationToken);
 

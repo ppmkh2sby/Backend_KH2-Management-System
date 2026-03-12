@@ -57,11 +57,6 @@ public static class DependencyInjection
         services.AddOptions<DevelopmentAuthOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthOptions.SectionName));
 
-        var developmentAuthOptions = configuration
-            .GetSection(DevelopmentAuthOptions.SectionName)
-            .Get<DevelopmentAuthOptions>()
-            ?? new DevelopmentAuthOptions();
-
         services.AddOptions<DevelopmentAuthorizationOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthorizationOptions.SectionName));
 
@@ -99,14 +94,7 @@ public static class DependencyInjection
 
         services.AddScoped<ISantriAccessReader, DevelopmentSantriAccessReader>();
         services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
-        if (developmentAuthOptions.Enabled)
-        {
-            services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
-        }
-        else
-        {
-            services.AddScoped<IUserAuthenticator, DbUserAuthenticator>();
-        }
+        services.AddScoped<IUserAuthenticator, CompositeUserAuthenticator>();
 
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
         services.AddScoped<IPasswordHasher, AspNetPasswordHasher>();

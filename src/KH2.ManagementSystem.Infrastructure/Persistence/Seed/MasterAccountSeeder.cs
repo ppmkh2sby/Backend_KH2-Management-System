@@ -13,24 +13,42 @@ public sealed class MasterAccountSeeder(
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        await SeedSantrisAsync(Putra(), cancellationToken);
-        await SeedSantrisAsync(Putri(), cancellationToken);
-        await SeedStaffAsync(DewanGuru(), cancellationToken);
-        await SeedStaffAsync(Pengurus(), cancellationToken);
+        var knownUsernames = new HashSet<string>(
+            await dbContext.Users
+                .AsNoTracking()
+                .Select(x => x.Username)
+                .ToListAsync(cancellationToken),
+            StringComparer.Ordinal);
+
+        var knownSantriNis = new HashSet<string>(
+            await dbContext.Santris
+                .AsNoTracking()
+                .Select(x => x.Nis)
+                .ToListAsync(cancellationToken),
+            StringComparer.Ordinal);
+
+        await SeedSantrisAsync(Putra(), knownUsernames, knownSantriNis, cancellationToken);
+        await SeedSantrisAsync(Putri(), knownUsernames, knownSantriNis, cancellationToken);
+        await SeedStaffAsync(DewanGuru(), knownUsernames, cancellationToken);
+        await SeedStaffAsync(Pengurus(), knownUsernames, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task SeedSantrisAsync(
         IReadOnlyCollection<SantriSeedItem> items,
+        HashSet<string> knownUsernames,
+        HashSet<string> knownSantriNis,
         CancellationToken cancellationToken)
     {
         foreach (var item in items)
         {
-            var existingUser = await dbContext.Users
-                .FirstOrDefaultAsync(x => x.Username == item.Nis, cancellationToken);
+            var existingUser = dbContext.Users.Local
+                .FirstOrDefault(x => x.Username == item.Nis)
+                ?? await dbContext.Users
+                    .FirstOrDefaultAsync(x => x.Username == item.Nis, cancellationToken);
 
-            if (existingUser is null)
+            if (existingUser is null && knownUsernames.Add(item.Nis))
             {
                 var user = CreateUser(
                     username: item.Nis,
@@ -41,10 +59,16 @@ public sealed class MasterAccountSeeder(
                 existingUser = user;
             }
 
-            var existingSantri = await dbContext.Santris
-                .FirstOrDefaultAsync(x => x.Nis == item.Nis, cancellationToken);
+            if (existingUser is not null)
+            {
+                existingUser.Rename(item.Name);
+                existingUser.Activate();
+                existingUser.CompletePasswordChange();
 
-            if (existingSantri is not null)
+                EnsureSeedPassword(existingUser);
+            }
+
+            if (existingUser is null || !knownSantriNis.Add(item.Nis))
             {
                 continue;
             }
@@ -67,14 +91,27 @@ public sealed class MasterAccountSeeder(
 
     private async Task SeedStaffAsync(
         IReadOnlyCollection<StaffSeedItem> items,
+        HashSet<string> knownUsernames,
         CancellationToken cancellationToken)
     {
         foreach (var item in items)
         {
-            var exists = await dbContext.Users
-                .AnyAsync(x => x.Username == item.Code, cancellationToken);
+            var existingUser = dbContext.Users.Local
+                .FirstOrDefault(x => x.Username == item.Code)
+                ?? await dbContext.Users
+                    .FirstOrDefaultAsync(x => x.Username == item.Code, cancellationToken);
 
-            if (exists)
+            if (existingUser is not null)
+            {
+                existingUser.Rename(item.Name);
+                existingUser.Activate();
+                existingUser.CompletePasswordChange();
+                EnsureSeedPassword(existingUser);
+
+                continue;
+            }
+
+            if (!knownUsernames.Add(item.Code))
             {
                 continue;
             }
@@ -84,6 +121,7 @@ public sealed class MasterAccountSeeder(
                 fullName: item.Name,
                 role: item.Role);
 
+            user.CompletePasswordChange();
             await dbContext.Users.AddAsync(user, cancellationToken);
         }
     }
@@ -99,12 +137,23 @@ public sealed class MasterAccountSeeder(
             passwordHash: "TEMP_HASH",
             emailConfirmed: false,
             isActive: true,
-            mustChangePassword: true);
+            mustChangePassword: false);
 
         var hash = passwordHasher.HashPassword(user, InitialPassword);
         user.SetPasswordHash(hash);
 
         return user;
+    }
+
+    private void EnsureSeedPassword(User user)
+    {
+        if (passwordHasher.VerifyPassword(user, user.PasswordHash, InitialPassword))
+        {
+            return;
+        }
+
+        var hash = passwordHasher.HashPassword(user, InitialPassword);
+        user.SetPasswordHash(hash);
     }
 
     private static SantriSeedItem[] Putra() =>
@@ -156,7 +205,7 @@ public sealed class MasterAccountSeeder(
             new SantriSeedItem("IMELYA URIVARTOUSI", "022525008", "ITS", "Sistem Informasi", "putri", "KTB", "Lambatan"), 
             new SantriSeedItem("MAYLAVASA ADIVA BILQIS", "022525009", "PENS", "Teknik Elektronika Industri", "putri", "Kebersihan", "Bacaan"), 
             new SantriSeedItem("QISTHI KHIROFATI MADINA SENOAJI", "022525010", "PENS", "Teknik Informatika", "putri", "Acara", "Bacaan"), 
-            new SantriSeedItem("RASHIDA ZARA FAUZIAH", "022525013", "ITS", "Studi Pembangunan", "putri", "Sekben", "Lambatan"),
+            new SantriSeedItem("RASHIDA ZARA FAUZIAH", "022525011", "ITS", "Studi Pembangunan", "putri", "Sekben", "Lambatan"),
             new SantriSeedItem("SAFA KARINDAH KAHAYA AISHA", "022525012", "UMS", "Farmasi", "putri", "Upkpt", "Bacaan"),
             new SantriSeedItem("SYARIFAH HUURI FILJANNAH", "022525014", "ITS", "Teknik Kimia", "putri", "KBM", "Bacaan")
         };

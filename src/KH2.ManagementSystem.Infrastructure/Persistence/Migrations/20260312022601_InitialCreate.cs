@@ -8,6 +8,8 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
     /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
+        private static readonly string[] WaliSantriRelationUserSantriColumns = ["WaliUserId", "SantriId"];
+
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -137,7 +139,7 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_WaliSantriRelations_WaliUserId_SantriId",
                 table: "WaliSantriRelations",
-                columns: new[] { "WaliUserId", "SantriId" },
+                columns: WaliSantriRelationUserSantriColumns,
                 unique: true);
         }
 

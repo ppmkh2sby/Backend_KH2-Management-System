@@ -57,8 +57,6 @@ public static class DependencyInjection
         services.AddOptions<DevelopmentAuthorizationOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthorizationOptions.SectionName));
 
-        services.AddSingleton<IAuthorizationHandler, CanAccessSantriHandler>();
-
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -94,6 +92,7 @@ public static class DependencyInjection
         services.AddScoped<IUserAuthenticator, DevelopmentUserAuthenticator>();
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
         services.AddScoped<ISantriAccessReader, DevelopmentSantriAccessReader>();
+        services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
         services.AddSingleton<IClock, SystemClock>();
 
         return services;

@@ -12,4 +12,8 @@
     <ProjectReference Include="..\KH2.ManagementSystem.Domain\KH2.ManagementSystem.Domain.csproj" />
     <ProjectReference Include="..\KH2.ManagementSystem.Shared\KH2.ManagementSystem.Shared.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.4" />
+  </ItemGroup>
 </Project>

@@ -1,8 +1,11 @@
+using System.Text;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 
 namespace KH2.ManagementSystem.Infrastructure;
 
@@ -35,6 +38,32 @@ public static class DependencyInjection
                 options => options.RefreshTokenLifetimeDays > 0,
                 $"{JwtOptions.SectionName}:RefreshTokenLifetimeDays must be greater than 0.")
             .ValidateOnStart();
+
+        var jwtOptions = configuration
+            .GetSection(JwtOptions.SectionName)
+            .Get<JwtOptions>()
+            ?? throw new InvalidOperationException("JWT configuration is missing.");
+
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtOptions.Issuer,
+
+                    ValidateAudience = true,
+                    ValidAudience = jwtOptions.Audience,
+
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
+
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
 
         services.AddSingleton<IClock, SystemClock>();
 

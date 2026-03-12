@@ -10,16 +10,21 @@ builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddHealthChecks();
+
 builder.Services.Configure<ApplicationMetadataOptions>(
     builder.Configuration.GetSection(ApplicationMetadataOptions.SectionName));
 
 builder.Services.AddScoped<IQueryHandler<GetSystemOverviewQuery, Result<SystemOverviewDto>>, GetSystemOverviewQueryHandler>();
+
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");

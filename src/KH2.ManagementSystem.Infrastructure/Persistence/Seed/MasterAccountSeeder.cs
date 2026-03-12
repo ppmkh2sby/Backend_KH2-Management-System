@@ -110,55 +110,55 @@ public sealed class MasterAccountSeeder(
     private static SantriSeedItem[] Putra() =>
         new[]
         {
-            new SantriSeedItem("ABDULLAH JUWAN DAWATRA", "022121013", "UNAIR", "Keselamatan dan Kesehatan Kerja", "putra", "PH", "Cepatan"),
+            new SantriSeedItem("ABDULLAH JUWAN DAWAIRA", "022121013", "UNAIR", "Keselamatan dan Kesehatan Kerja", "putra", "PH", "Cepatan"),
             new SantriSeedItem("MUHAMMAD FARID FATCHUR", "022222001", "ITS", "Sistem Perkapalan", "putra", "Kebersihan", "Cepatan"),
-            new SantriSeedItem("MUHAMMAD FATI RAJINA NAFIE", "022222006", "UNAIR", "Matematika", "putra", "Sekben", "Lambatan"),
+            new SantriSeedItem("MUHAMMAD FATH RAJIHAN NAFIE", "022222006", "UNAIR", "Matematika", "putra", "Sekben", "Lambatan"),
             new SantriSeedItem("ARDIAS AJI SAPUTRO", "022323002", "ITS", "Teknik Infrastruktur Sipil", "putra", "KBM", "Lambatan"),
             new SantriSeedItem("MUHAMMAD IRSYAD IBRAHIMOVIC", "022323004", "ITS", "Teknik Material dan Metalurgi", "putra", "PH", "Lambatan"),
-            new SantriSeedItem("SYAIFUDIN AKBARI ABLUDIN", "022323006", "PPNS", "Manajemen Bisnis", "putra", "Acara", "Pegon"), // cek ejaan sesuai source asli
-            new SantriSeedItem("ALVIDA RAHMAT", "022424001", "ITS", "Sistem Informasi", "putra", "KTB", "Lambatan"),
-            new SantriSeedItem("FAHMI ROSYIDI AL ULYA", "022424006", "PENS", "Teknik Informatika", "putra", "Sekben", "Lambatan"),
+            new SantriSeedItem("SYAIFUDIN AKBARI ABILUDIN", "022323006", "PPNS", "Manajemen Bisnis", "putra", "Acara", "Pegon"), 
+            new SantriSeedItem("ALWIDA RAHMAT", "022424001", "ITS", "Sistem Informasi", "putra", "KTB", "Lambatan"),
+            new SantriSeedItem("FAHMI ROSYIDIN AL'ULYA", "022424006", "PENS", "Teknik Informatika", "putra", "Sekben", "Lambatan"),
             new SantriSeedItem("KEISHA ZAFIF FAHREZI", "022424007", "PENS", "Multimedia Broadcast", "putra", "Acara", "Lambatan"),
             new SantriSeedItem("MAESTRO RAFA AGNIYA", "022424008", "PENS", "Teknik Informatika", "putra", "KTB", "Lambatan"),
             new SantriSeedItem("MUHAMMAD FARREL AL-AQSA", "022424010", "UNAIR", "Fisioterapi", "putra", "Upkpt", "Bacaan"),
-            new SantriSeedItem("MUHAMMAD FATIZKY ALFATH BAHARDAN PUTRA", "022424011", "ITS", "Teknik Sipil", "putra", "KBM", "Pegon"), // cek ejaan sesuai source asli
+            new SantriSeedItem("MUHAMMAD FARIZKY ALFATH MAHARDIAN PUTRA", "022424011", "ITS", "Teknik Sipil", "putra", "KBM", "Pegon"), 
             new SantriSeedItem("MUHAMMAD SETYO ARFAN IBRAHIM", "022424012", "ITS", "Desain Produk", "putra", "Upkpt", "Bacaan"),
             new SantriSeedItem("VIKY KARUNIA PUTRA PRATAMA", "022423017", "PPNS", "Teknik Desain dan Manufaktur", "putra", "Kebersihan", "Lambatan"),
             new SantriSeedItem("ZAKI AFIF ARIF", "022424019", "ITS", "Teknik Lingkungan", "putra", "KBM", "Bacaan"),
-            new SantriSeedItem("BRILIANT AHMAD RAMADHAN", "022525004", "ITS", "Teknik Lepas Pantai", "putra", "Kebersihan", "Lambatan"),
+            new SantriSeedItem("BRILIANT ACHMAD RAMADHAN", "022525004", "ITS", "Teknik Lepas Pantai", "putra", "Kebersihan", "Lambatan"),
             new SantriSeedItem("DIMAS ADI SANJAYA", "022525005", "Universitas Dr. Soetomo", "Manajemen", "putra", "Upkpt", "Bacaan"),
             new SantriSeedItem("FARIS JULDAN", "022525006", "PPNS", "Keselamatan dan Kesehatan Kerja", "putra", "Sekben", "Bacaan"),
             new SantriSeedItem("HANAFI SATRIYO UTOMO SETIAWAN", "022525007", "ITS", "S2 - Teknik Informatika", "putra", "Acara", "Bacaan"),
-            new SantriSeedItem("SOFWAN IFTAKHUDDIN MAARIF", "022525013", "UNAIR", "Farmasi", "putra", "KTB", "Bacaan"),
+            new SantriSeedItem("SOFWAN MIFTAKHUDDIN MAARIF", "022525013", "UNAIR", "Farmasi", "putra", "KTB", "Bacaan"),
             new SantriSeedItem("MUHAMAD BAEHAQI AL MUJAHIDIN", "022524015", "UNAIR", "Teknologi Hasil Perikanan", "putra", "Acara", "Pegon")
         };
 
     private static SantriSeedItem[] Putri() =>
         new[]
         {
-            new SantriSeedItem("TARTISA ADELYA SAFETRA", "022222004", "ITS", "Perencanaan Wilayah dan Kota", "putri", "Acara", "Cepatan"),
+            new SantriSeedItem("TARISSA ADELYA SAFIERA", "022222004", "ITS", "Perencanaan Wilayah dan Kota", "putri", "Acara", "Cepatan"),
             new SantriSeedItem("AISYA WIDYA PRATIWI", "022323001", "UNAIR", "Matematika", "putri", "PH", "Cepatan"),
             new SantriSeedItem("CASEY PALLAS TALITHA HARJANTO", "022323003", "ITS", "Desain Komunikasi Visual", "putri", "Kebersihan", "Lambatan"),
             new SantriSeedItem("RIZKY KHOIRUNNISA", "022323005", "PENS", "Teknik Telekomunikasi", "putri", "KBM", "Pegon"),
-            new SantriSeedItem("AYESHA NAYYARA PUTRI MURODI", "022424002", "PPNS", "Teknik Perancangan dan Konstruksi Kapal", "putri", "Acara", "Lambatan"),
-            new SantriSeedItem("AZZAHRA JAMALULLAILY MAFZA", "022424003", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "Upkpt", "Lambatan"), // cek ejaan
-            new SantriSeedItem("CHERFINE AN-NISAUL AULIYA ULLA", "022424004", "ITS", "Teknik Sipil", "putri", "KBM", "Lambatan"), // cek ejaan
-            new SantriSeedItem("DEVEN KARTIKA WITAYA", "022424005", "ITS", "Arsitektur", "putri", "Kebersihan", "Lambatan"), // cek ejaan
+            new SantriSeedItem("AYESHA NAYYARA PUTRI WURYADI", "022424002", "PPNS", "Teknik Perancangan dan Konstruksi Kapal", "putri", "Acara", "Lambatan"),
+            new SantriSeedItem("AZZAHRA JAMALULLAILY MAFZA", "022424003", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "Upkpt", "Lambatan"), 
+            new SantriSeedItem("CHERFINE AN-NISAUL AULIYA ULLA", "022424004", "ITS", "Teknik Sipil", "putri", "KBM", "Lambatan"), 
+            new SantriSeedItem("DEVEN KARTIKA WIJAYA", "022424005", "ITS", "Arsitektur", "putri", "Kebersihan", "Lambatan"),
             new SantriSeedItem("MARITZA DARA ATHIFA", "022424009", "ITS", "Sistem Informasi", "putri", "Sekben", "Pegon"),
             new SantriSeedItem("NABILA KAYSA ADRISTI", "022424013", "ITS", "Studi Pembangunan", "putri", "Kebersihan", "Cepatan"),
             new SantriSeedItem("RARA ARIMBI GITA ATMODJO", "022424014", "ITS", "Desain Komunikasi Visual", "putri", "PH", "Pegon"),
             new SantriSeedItem("RENATA KEYSHA AZALIA KHORUNNISA", "022424015", "ITS", "Teknik Geofisika", "putri", "Acara", "Lambatan"),
-            new SantriSeedItem("SYAHDINDA SHERLYA LAURA", "022424016", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "KTB", "Lambatan"),
+            new SantriSeedItem("SYAHDINDA SHERLYTA LAURA", "022424016", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "KTB", "Lambatan"),
             new SantriSeedItem("ZAHRA SUCIANA TRI AMMA MARETHA", "022424018", "UNAIR", "Akuntansi", "putri", "Sekben", "Lambatan"),
-            new SantriSeedItem("AMANDA RAMADANI PUTRI PANGESTI", "022525001", "PENS", "Teknik Informatika", "putri", "Upkpt", "Bacaan"),
-            new SantriSeedItem("AURA RENATA ADASIYA AZKA", "022525002", "PENS", "Sains Data Terapan", "putri", "Acara", "Bacaan"),
+            new SantriSeedItem("AMANDA RAMADHANI PUTRI PANGESTI", "022525001", "PENS", "Teknik Informatika", "putri", "Upkpt", "Bacaan"),
+            new SantriSeedItem("AURA RENATA ANASYIYA AZKA", "022525002", "PENS", "Sains Data Terapan", "putri", "Acara", "Bacaan"),
             new SantriSeedItem("BALQIS SALWA AURELIA AZZAHRA", "022525003", "ITS", "Teknologi Kedokteran", "putri", "KTB", "Bacaan"),
-            new SantriSeedItem("IMELYA URIVARTOUSTI", "022525008", "ITS", "Sistem Informasi", "putri", "KTB", "Lambatan"), // cek ejaan + NIS
-            new SantriSeedItem("MAYLAVASA ADIVA BIQIS", "022525009", "PENS", "Teknik Elektronika Industri", "putri", "Kebersihan", "Bacaan"), // cek ejaan
-            new SantriSeedItem("QISTHI KHIROFATI MADINA SENOA", "022525010", "PENS", "Teknik Informatika", "putri", "Acara", "Bacaan"), // cek ejaan
+            new SantriSeedItem("IMELYA URIVARTOUSI", "022525008", "ITS", "Sistem Informasi", "putri", "KTB", "Lambatan"), 
+            new SantriSeedItem("MAYLAVASA ADIVA BILQIS", "022525009", "PENS", "Teknik Elektronika Industri", "putri", "Kebersihan", "Bacaan"), 
+            new SantriSeedItem("QISTHI KHIROFATI MADINA SENOAJI", "022525010", "PENS", "Teknik Informatika", "putri", "Acara", "Bacaan"), 
             new SantriSeedItem("RASHIDA ZARA FAUZIAH", "022525013", "ITS", "Studi Pembangunan", "putri", "Sekben", "Lambatan"),
-            new SantriSeedItem("SAFA KARINDAH KAHYA AISHA", "022525012", "UMS", "Farmasi", "putri", "Upkpt", "Bacaan"), // cek ejaan
-            new SantriSeedItem("SYARIFAH HURI FILJANNAH", "022525014", "ITS", "Teknik Kimia", "putri", "KBM", "Bacaan")
+            new SantriSeedItem("SAFA KARINDAH KAHAYA AISHA", "022525012", "UMS", "Farmasi", "putri", "Upkpt", "Bacaan"),
+            new SantriSeedItem("SYARIFAH HUURI FILJANNAH", "022525014", "ITS", "Teknik Kimia", "putri", "KBM", "Bacaan")
         };
 
     private static StaffSeedItem[] DewanGuru() =>

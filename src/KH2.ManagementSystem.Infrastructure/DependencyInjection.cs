@@ -6,7 +6,9 @@ using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Infrastructure.Authentication;
 using KH2.ManagementSystem.Infrastructure.Time;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
+using KH2.ManagementSystem.Application.Abstractions.Dashboard;
 using KH2.ManagementSystem.Infrastructure.Authorization;
+using KH2.ManagementSystem.Infrastructure.Dashboard;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using KH2.ManagementSystem.Application.Abstractions.Security;
 using KH2.ManagementSystem.Infrastructure.Security;
@@ -92,7 +94,8 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString);
         });
 
-        services.AddScoped<ISantriAccessReader, DevelopmentSantriAccessReader>();
+        services.AddScoped<ISantriAccessReader, AppDbSantriAccessReader>();
+        services.AddScoped<ISantriDashboardReader, SantriDashboardReader>();
         services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
         services.AddScoped<IUserAuthenticator, CompositeUserAuthenticator>();
 

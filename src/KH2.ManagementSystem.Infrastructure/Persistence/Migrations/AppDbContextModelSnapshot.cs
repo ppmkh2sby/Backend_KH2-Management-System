@@ -101,6 +101,248 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Kafarahs.Kafarah", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("JenisPelanggaran")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("JumlahSetor")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("KafarahText")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("Kafarah");
+
+                    b.Property<Guid>("SantriId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Tanggal")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Tanggungan")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Tenggat")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SantriId", "Tanggal");
+
+                    b.ToTable("Kafarahs", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Kegiatans.Kegiatan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Catatan")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kategori")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Waktu")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kategori", "Waktu")
+                        .IsUnique();
+
+                    b.ToTable("Kegiatans", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.LogKeluarMasuks.LogKeluarMasuk", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Catatan")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Jenis")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Petugas")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Rentang")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("SantriId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateOnly>("TanggalPengajuan")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TanggalPengajuan");
+
+                    b.HasIndex("SantriId", "TanggalPengajuan");
+
+                    b.ToTable("LogKeluarMasuks", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Presensis.Presensi", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Catatan")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("KegiatanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Nama")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("SantriId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SesiId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Waktu")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasDatabaseName("IX_Presensis_CreatedAtUtc_LegacyNullSesi")
+                        .HasFilter("\"SesiId\" IS NULL");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UpdatedAtUtc");
+
+                    b.HasIndex("KegiatanId", "Waktu");
+
+                    b.HasIndex("SantriId", "CreatedAtUtc");
+
+                    b.HasIndex("SantriId", "Status");
+
+                    b.HasIndex("SesiId", "CreatedAtUtc");
+
+                    b.HasIndex("SesiId", "SantriId");
+
+                    b.ToTable("Presensis", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.ProgressKeilmuans.ProgressKeilmuan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Capaian")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Catatan")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Judul")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Level")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Pembimbing")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("SantriId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Satuan")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("Target")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("TerakhirSetorUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Level");
+
+                    b.HasIndex("Level", "SantriId");
+
+                    b.HasIndex("SantriId", "Judul");
+
+                    b.HasIndex("SantriId", "UpdatedAtUtc");
+
+                    b.ToTable("ProgressKeilmuans", (string)null);
+                });
+
             modelBuilder.Entity("KH2.ManagementSystem.Domain.Santris.Santri", b =>
                 {
                     b.Property<Guid>("Id")
@@ -163,6 +405,36 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Santris", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Sesis.Sesi", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Catatan")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("KegiatanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Tanggal")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KegiatanId");
+
+                    b.HasIndex("Tanggal");
+
+                    b.ToTable("Sesis", (string)null);
                 });
 
             modelBuilder.Entity("KH2.ManagementSystem.Domain.Users.User", b =>
@@ -261,12 +533,68 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Kafarahs.Kafarah", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Santris.Santri", null)
+                        .WithMany()
+                        .HasForeignKey("SantriId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.LogKeluarMasuks.LogKeluarMasuk", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Santris.Santri", null)
+                        .WithMany()
+                        .HasForeignKey("SantriId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Presensis.Presensi", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Kegiatans.Kegiatan", null)
+                        .WithMany()
+                        .HasForeignKey("KegiatanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KH2.ManagementSystem.Domain.Santris.Santri", null)
+                        .WithMany()
+                        .HasForeignKey("SantriId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KH2.ManagementSystem.Domain.Sesis.Sesi", null)
+                        .WithMany()
+                        .HasForeignKey("SesiId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.ProgressKeilmuans.ProgressKeilmuan", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Santris.Santri", null)
+                        .WithMany()
+                        .HasForeignKey("SantriId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("KH2.ManagementSystem.Domain.Santris.Santri", b =>
                 {
                     b.HasOne("KH2.ManagementSystem.Domain.Users.User", null)
                         .WithOne()
                         .HasForeignKey("KH2.ManagementSystem.Domain.Santris.Santri", "UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.Sesis.Sesi", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Kegiatans.Kegiatan", null)
+                        .WithMany()
+                        .HasForeignKey("KegiatanId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

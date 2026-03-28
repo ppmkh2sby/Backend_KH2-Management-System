@@ -1,6 +1,14 @@
+using System.Globalization;
 using KH2.ManagementSystem.Application.Abstractions.Security;
+using KH2.ManagementSystem.Domain.Kafarahs;
+using KH2.ManagementSystem.Domain.Kegiatans;
+using KH2.ManagementSystem.Domain.LogKeluarMasuks;
+using KH2.ManagementSystem.Domain.Presensis;
+using KH2.ManagementSystem.Domain.ProgressKeilmuans;
 using KH2.ManagementSystem.Domain.Santris;
+using KH2.ManagementSystem.Domain.Sesis;
 using KH2.ManagementSystem.Domain.Users;
+using KH2.ManagementSystem.Domain.Walis;
 using Microsoft.EntityFrameworkCore;
 
 namespace KH2.ManagementSystem.Infrastructure.Persistence.Seed;
@@ -11,7 +19,9 @@ public sealed class MasterAccountSeeder(
 {
     private const string InitialPassword = "Kh2Awal123!";
 
-    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    public async Task SeedAsync(
+        bool includeSampleData = true,
+        CancellationToken cancellationToken = default)
     {
         var knownUsernames = new HashSet<string>(
             await dbContext.Users
@@ -29,9 +39,13 @@ public sealed class MasterAccountSeeder(
 
         await SeedSantrisAsync(Putra(), knownUsernames, knownSantriNis, cancellationToken);
         await SeedSantrisAsync(Putri(), knownUsernames, knownSantriNis, cancellationToken);
+        await SeedStaffAsync(Admins(), knownUsernames, cancellationToken);
         await SeedStaffAsync(DewanGuru(), knownUsernames, cancellationToken);
         await SeedStaffAsync(Pengurus(), knownUsernames, cancellationToken);
+        await SeedStaffAsync(WaliSantris(), knownUsernames, cancellationToken);
 
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await SeedRelatedDataAsync(includeSampleData, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -123,6 +137,370 @@ public sealed class MasterAccountSeeder(
 
             user.CompletePasswordChange();
             await dbContext.Users.AddAsync(user, cancellationToken);
+        }
+    }
+
+    private async Task SeedRelatedDataAsync(
+        bool includeSampleData,
+        CancellationToken cancellationToken)
+    {
+        var santris = await dbContext.Santris
+            .AsNoTracking()
+            .OrderBy(x => x.Gender)
+            .ThenBy(x => x.Nis)
+            .ToListAsync(cancellationToken);
+
+        if (santris.Count == 0)
+        {
+            return;
+        }
+
+        var santriByNis = santris.ToDictionary(x => x.Nis, StringComparer.Ordinal);
+
+        await SeedWaliRelationsAsync(santriByNis, cancellationToken);
+
+        if (!includeSampleData)
+        {
+            return;
+        }
+
+        var sessions = await EnsureSeedSessionsAsync(cancellationToken);
+        await SeedPresensiAsync(santris, sessions, cancellationToken);
+        await SeedKafarahAsync(santris, cancellationToken);
+        await SeedProgressAsync(santris, cancellationToken);
+        await SeedLogKeluarMasukAsync(santris, cancellationToken);
+    }
+
+    private async Task SeedWaliRelationsAsync(
+        Dictionary<string, Santri> santriByNis,
+        CancellationToken cancellationToken)
+    {
+        var relationSpecs = new[]
+        {
+            new { Username = "wali", SantriNis = new[] { "022424008", "022424001" } },
+            new { Username = "wali-putri", SantriNis = new[] { "022424016", "022525003" } }
+        };
+
+        foreach (var spec in relationSpecs)
+        {
+            var waliUser = await dbContext.Users
+                .FirstOrDefaultAsync(
+                    x => x.Username == spec.Username && x.Role == UserRole.WaliSantri,
+                    cancellationToken);
+
+            if (waliUser is null)
+            {
+                continue;
+            }
+
+            foreach (var nis in spec.SantriNis)
+            {
+                if (!santriByNis.TryGetValue(nis, out var santri))
+                {
+                    continue;
+                }
+
+                var existing = await dbContext.WaliSantriRelations
+                    .FirstOrDefaultAsync(
+                        x => x.WaliUserId == waliUser.Id && x.SantriId == santri.Id,
+                        cancellationToken);
+
+                if (existing is not null)
+                {
+                    existing.ChangeRelationshipLabel("Orang Tua");
+                    continue;
+                }
+
+                await dbContext.WaliSantriRelations.AddAsync(
+                    new WaliSantriRelation(
+                        Guid.NewGuid(),
+                        waliUser.Id,
+                        santri.Id,
+                        "Orang Tua"),
+                    cancellationToken);
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<(Kegiatan Kegiatan, Sesi Sesi)>> EnsureSeedSessionsAsync(
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var specs = new[]
+        {
+            new SessionSeedItem(today.AddDays(-3), "sambung", "pagi", "Sambung Pagi"),
+            new SessionSeedItem(today.AddDays(-2), "asrama", "subuh", "Asrama Subuh"),
+            new SessionSeedItem(today.AddDays(-1), "sambung", "siang", "Sambung Siang"),
+            new SessionSeedItem(today, "asrama", "malam", "Asrama Malam")
+        };
+
+        var result = new List<(Kegiatan Kegiatan, Sesi Sesi)>(specs.Length);
+        foreach (var spec in specs)
+        {
+            var kegiatan = await EnsureKegiatanAsync(spec.Kategori, spec.Waktu, spec.Catatan, cancellationToken);
+            var sesi = await EnsureSesiAsync(kegiatan.Id, spec.Tanggal, cancellationToken);
+            result.Add((kegiatan, sesi));
+        }
+
+        return result;
+    }
+
+    private async Task<Kegiatan> EnsureKegiatanAsync(
+        string kategori,
+        string waktu,
+        string catatan,
+        CancellationToken cancellationToken)
+    {
+        var existing = dbContext.Kegiatans.Local
+            .FirstOrDefault(x => x.Kategori == kategori && x.Waktu == waktu)
+            ?? await dbContext.Kegiatans
+                .FirstOrDefaultAsync(x => x.Kategori == kategori && x.Waktu == waktu, cancellationToken);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var kegiatan = new Kegiatan(Guid.NewGuid(), kategori, waktu, catatan);
+        await dbContext.Kegiatans.AddAsync(kegiatan, cancellationToken);
+        return kegiatan;
+    }
+
+    private async Task<Sesi> EnsureSesiAsync(
+        Guid kegiatanId,
+        DateOnly tanggal,
+        CancellationToken cancellationToken)
+    {
+        var existing = dbContext.Sesis.Local
+            .FirstOrDefault(x => x.KegiatanId == kegiatanId && x.Tanggal == tanggal)
+            ?? await dbContext.Sesis
+                .FirstOrDefaultAsync(x => x.KegiatanId == kegiatanId && x.Tanggal == tanggal, cancellationToken);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var sesi = new Sesi(Guid.NewGuid(), kegiatanId, tanggal);
+        await dbContext.Sesis.AddAsync(sesi, cancellationToken);
+        return sesi;
+    }
+
+    private async Task SeedPresensiAsync(
+        List<Santri> santris,
+        IReadOnlyList<(Kegiatan Kegiatan, Sesi Sesi)> sessions,
+        CancellationToken cancellationToken)
+    {
+        for (var santriIndex = 0; santriIndex < santris.Count; santriIndex++)
+        {
+            var santri = santris[santriIndex];
+
+            for (var sessionIndex = 0; sessionIndex < sessions.Count; sessionIndex++)
+            {
+                var session = sessions[sessionIndex];
+                var status = ResolvePresensiStatus(santriIndex, sessionIndex);
+                var catatan = ResolvePresensiCatatan(status);
+
+                var existing = await dbContext.Presensis
+                    .FirstOrDefaultAsync(
+                        x => x.SantriId == santri.Id && x.SesiId == session.Sesi.Id,
+                        cancellationToken);
+
+                if (existing is not null)
+                {
+                    existing.Update(
+                        santri.Id,
+                        santri.FullName,
+                        status,
+                        session.Kegiatan.Id,
+                        session.Sesi.Id,
+                        catatan,
+                        session.Kegiatan.Waktu,
+                        DateTimeOffset.UtcNow);
+
+                    continue;
+                }
+
+                await dbContext.Presensis.AddAsync(
+                    new Presensi(
+                        Guid.NewGuid(),
+                        santri.Id,
+                        santri.FullName,
+                        status,
+                        session.Kegiatan.Id,
+                        session.Sesi.Id,
+                        catatan,
+                        session.Kegiatan.Waktu),
+                    cancellationToken);
+            }
+        }
+    }
+
+    private async Task SeedKafarahAsync(
+        List<Santri> santris,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var definitions = new[]
+        {
+            "tidak_sholat_subuh_di_masjid",
+            "tidak_sambung_pagi",
+            "tidak_sambung_malam",
+            "tidak_apel_malam",
+            "tidak_sholat_malam",
+            "terlambat_kembali_ke_ppm",
+            "tidak_asrama_sesi_pagi",
+            "tidak_asrama_sesi_siang",
+            "tidak_asrama_sesi_sore",
+            "tidak_asrama_sesi_malam"
+        };
+
+        for (var index = 0; index < Math.Min(10, santris.Count); index++)
+        {
+            var santri = santris[index];
+            var jenis = definitions[index % definitions.Length];
+            var definition = Kafarah.ResolveDefinition(jenis);
+            var tanggal = today.AddDays(-(index + 1));
+            var jumlahSetor = index % 3;
+            var tanggungan = Math.Max(1, definition.DefaultAmount);
+            var tenggat = tanggal.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            var existing = await dbContext.Kafarahs
+                .FirstOrDefaultAsync(
+                    x => x.SantriId == santri.Id &&
+                        x.Tanggal == tanggal &&
+                        x.JenisPelanggaran == jenis,
+                    cancellationToken);
+
+            if (existing is not null)
+            {
+                existing.Update(
+                    tanggal,
+                    definition.Code,
+                    definition.Description,
+                    jumlahSetor,
+                    tanggungan,
+                    tenggat,
+                    DateTimeOffset.UtcNow);
+
+                continue;
+            }
+
+            await dbContext.Kafarahs.AddAsync(
+                new Kafarah(
+                    Guid.NewGuid(),
+                    santri.Id,
+                    tanggal,
+                    definition.Code,
+                    definition.Description,
+                    jumlahSetor,
+                    tanggungan,
+                    tenggat),
+                cancellationToken);
+        }
+    }
+
+    private async Task SeedProgressAsync(
+        List<Santri> santris,
+        CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < Math.Min(12, santris.Count); index++)
+        {
+            var santri = santris[index];
+            var progressSpecs = new[]
+            {
+                new
+                {
+                    Judul = "Setor Juz 30",
+                    Target = 37,
+                    Capaian = Math.Min(37, 18 + index),
+                    Satuan = "halaman",
+                    Level = ProgressKeilmuan.LevelQuran,
+                    Catatan = "Perkembangan murojaah mingguan",
+                    Pembimbing = "Ustadz Amir"
+                },
+                new
+                {
+                    Judul = "Hafalan Arbain",
+                    Target = 20,
+                    Capaian = Math.Min(20, 8 + (index % 10)),
+                    Satuan = "hadits",
+                    Level = ProgressKeilmuan.LevelHadits,
+                    Catatan = "Setoran hadits pekanan",
+                    Pembimbing = "Ustadz Anton"
+                }
+            };
+
+            foreach (var spec in progressSpecs)
+            {
+                var existing = await dbContext.ProgressKeilmuans
+                    .AnyAsync(
+                        x => x.SantriId == santri.Id && x.Judul == spec.Judul,
+                        cancellationToken);
+
+                if (existing)
+                {
+                    continue;
+                }
+
+                await dbContext.ProgressKeilmuans.AddAsync(
+                    new ProgressKeilmuan(
+                        Guid.NewGuid(),
+                        santri.Id,
+                        spec.Judul,
+                        spec.Target,
+                        spec.Capaian,
+                        spec.Satuan,
+                        spec.Level,
+                        spec.Catatan,
+                        spec.Pembimbing,
+                        DateTimeOffset.UtcNow.AddDays(-(index + 1))),
+                    cancellationToken);
+            }
+        }
+    }
+
+    private async Task SeedLogKeluarMasukAsync(
+        List<Santri> santris,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+        for (var index = 0; index < Math.Min(8, santris.Count); index++)
+        {
+            var santri = santris[index];
+            var tanggal = today.AddDays(-(index + 1));
+            var jenis = index % 2 == 0 ? "Keluar" : "Masuk";
+            var status = (index % 3) switch
+            {
+                0 => LogKeluarMasuk.StatusRecorded,
+                1 => LogKeluarMasuk.StatusPending,
+                _ => LogKeluarMasuk.StatusApproved
+            };
+
+            var exists = await dbContext.LogKeluarMasuks
+                .AnyAsync(
+                    x => x.SantriId == santri.Id &&
+                        x.TanggalPengajuan == tanggal &&
+                        x.Jenis == jenis,
+                    cancellationToken);
+
+            if (exists)
+            {
+                continue;
+            }
+
+            await dbContext.LogKeluarMasuks.AddAsync(
+                new LogKeluarMasuk(
+                    Guid.NewGuid(),
+                    santri.Id,
+                    tanggal,
+                    jenis,
+                    "14.00 - 16.00",
+                    status,
+                    "Ketertiban",
+                    index % 2 == 0 ? "Izin kegiatan kampus." : "Kembali ke pondok."),
+                cancellationToken);
         }
     }
 
@@ -218,6 +596,12 @@ public sealed class MasterAccountSeeder(
             new StaffSeedItem("0235499003", "Ridho", UserRole.DewanGuru)
         };
 
+    private static StaffSeedItem[] Admins() =>
+        new[]
+        {
+            new StaffSeedItem("admin", "Admin KH2", UserRole.Admin)
+        };
+
     private static StaffSeedItem[] Pengurus() =>
         new[]
         {
@@ -227,6 +611,36 @@ public sealed class MasterAccountSeeder(
             new StaffSeedItem("0218354004", "Avan", UserRole.Pengurus),
             new StaffSeedItem("0218354005", "Abdurrahman", UserRole.Pengurus)
         };
+
+    private static StaffSeedItem[] WaliSantris() =>
+        new[]
+        {
+            new StaffSeedItem("wali", "Wali Santri KH2", UserRole.WaliSantri),
+            new StaffSeedItem("wali-putri", "Wali Santri Putri KH2", UserRole.WaliSantri)
+        };
+
+    private static string ResolvePresensiStatus(int santriIndex, int sessionIndex)
+    {
+        return ((santriIndex + sessionIndex) % 10) switch
+        {
+            0 => "sakit",
+            1 => "izin",
+            2 => "alpa",
+            3 => "izin",
+            _ => "hadir"
+        };
+    }
+
+    private static string? ResolvePresensiCatatan(string status)
+    {
+        return status switch
+        {
+            "izin" => "Izin kegiatan kampus.",
+            "sakit" => "Sedang kurang fit.",
+            "alpa" => "Belum ada keterangan.",
+            _ => "Hadir sesuai jadwal."
+        };
+    }
 
     private sealed record SantriSeedItem(
         string Name,
@@ -242,4 +656,10 @@ public sealed class MasterAccountSeeder(
         string Code,
         string Name,
         UserRole Role);
+
+    private sealed record SessionSeedItem(
+        DateOnly Tanggal,
+        string Kategori,
+        string Waktu,
+        string Catatan);
 }

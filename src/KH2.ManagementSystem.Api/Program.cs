@@ -1,5 +1,9 @@
 using KH2.ManagementSystem.Api.Options;
 using KH2.ManagementSystem.Application.Abstractions.Messaging;
+using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriAttendance;
+using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriDashboard;
+using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriLog;
+using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriProgress;
 using KH2.ManagementSystem.Application.Features.System.GetSystemOverview;
 using KH2.ManagementSystem.Infrastructure.Persistence.Seed;
 using KH2.ManagementSystem.BuildingBlocks.Results;
@@ -55,6 +59,10 @@ builder.Services.Configure<ApplicationMetadataOptions>(
     builder.Configuration.GetSection(ApplicationMetadataOptions.SectionName));
 
 builder.Services.AddScoped<IQueryHandler<GetSystemOverviewQuery, Result<SystemOverviewDto>>, GetSystemOverviewQueryHandler>();
+builder.Services.AddScoped<IQueryHandler<GetMySantriDashboardQuery, Result<SantriDashboardDto>>, GetMySantriDashboardQueryHandler>();
+builder.Services.AddScoped<IQueryHandler<GetMySantriAttendanceQuery, Result<SantriDashboardAttendancePageDto>>, GetMySantriAttendanceQueryHandler>();
+builder.Services.AddScoped<IQueryHandler<GetMySantriProgressQuery, Result<SantriDashboardProgressPageDto>>, GetMySantriProgressQueryHandler>();
+builder.Services.AddScoped<IQueryHandler<GetMySantriLogQuery, Result<SantriDashboardLogPageDto>>, GetMySantriLogQueryHandler>();
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAuthorization(options =>
@@ -115,8 +123,15 @@ static async Task InitializeDatabaseAsync(WebApplication app)
 
     await dbContext.Database.MigrateAsync();
 
+    var seedOnStartup = app.Configuration.GetValue<bool?>("Database:SeedOnStartup") ?? true;
+    if (!seedOnStartup)
+    {
+        return;
+    }
+
+    var seedSampleDataOnStartup = app.Configuration.GetValue<bool?>("Database:SeedSampleDataOnStartup") ?? true;
     var seeder = scope.ServiceProvider.GetRequiredService<MasterAccountSeeder>();
-    await seeder.SeedAsync();
+    await seeder.SeedAsync(seedSampleDataOnStartup);
 }
 
 public partial class Program
@@ -125,6 +140,23 @@ public partial class Program
     [
         "/health",
         "/api/v1/system/info",
+        "/api/v1/presensi",
+        "/api/v1/kehadiran",
+        "/api/v1/presensi/rekap",
+        "/api/v1/presensi/bulk",
+        "/api/v1/ketertiban/presensi",
+        "/api/v1/kafarah",
+        "/api/v1/kafarah/bulk",
+        "/api/v1/progress-keilmuan",
+        "/api/v1/progress-keilmuan/staff",
+        "/api/v1/progress-keilmuan/{santriCode}/detail",
+        "/api/v1/progress-keilmuan/sync",
+        "/api/v1/log-keluar-masuk",
+        "/api/v1/santri",
+        "/api/v1/dashboard/santri/me",
+        "/api/v1/dashboard/santri/me/presensi",
+        "/api/v1/dashboard/santri/me/progres-keilmuan",
+        "/api/v1/dashboard/santri/me/log-keluar-masuk",
         "/api/v1/auth/login",
         "/api/v1/auth/me",
         "/api/v1/auth/change-password",

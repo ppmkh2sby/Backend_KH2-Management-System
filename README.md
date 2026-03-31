@@ -35,6 +35,10 @@ dotnet build KH2.ManagementSystem.slnx
 dotnet run --project src/KH2.ManagementSystem.Api
 ```
 
+## Deployment
+
+Panduan deployment backend Ubuntu 24.04 + `systemd` + Nginx + PostgreSQL ada di [docs/deployment-backend-ubuntu.md](/d:/project/Backend_KH2-Management-System/docs/deployment-backend-ubuntu.md).
+
 ## Endpoint awal
 
 - `GET /health`

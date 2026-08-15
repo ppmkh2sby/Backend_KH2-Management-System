@@ -1,0 +1,13 @@
+.git
+.vs
+.idea
+bin
+obj
+**/bin
+**/obj
+.env
+src/KH2.ManagementSystem.Api/appsettings.json
+src/KH2.ManagementSystem.Api/appsettings.Development.json
+**/*.user
+**/*.suo
+**/*.log

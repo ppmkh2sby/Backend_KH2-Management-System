@@ -12,6 +12,7 @@ using KH2.ManagementSystem.Infrastructure.FaceRecognition;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -19,6 +20,7 @@ namespace KH2.ManagementSystem.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[EnableRateLimiting("FaceRecognition")]
 [Route("api/v1/face-attendance/sessions")]
 public sealed class FaceAttendanceController(
     AppDbContext dbContext,
@@ -61,10 +63,14 @@ public sealed class FaceAttendanceController(
         if (session.OpenerUserId != userId) return Forbid();
         if (session.Status == FaceAttendanceSessionStatus.Closed) return ConflictProblem("Sesi telah ditutup.");
 
+        var profile = await dbContext.FaceProfiles.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        if (profile is null) return BadRequestProblem("Daftarkan wajah Anda terlebih dahulu sebelum membuka presensi wajah.");
+
         try
         {
             await using var stream = photo.OpenReadStream();
-            var result = await faceRecognitionClient.VerifyOpenerAsync(userId, new FaceImage(photo.FileName, photo.ContentType, stream), cancellationToken);
+            var result = await faceRecognitionClient.VerifyOpenerAsync(profile.ProviderProfileId, new FaceImage(photo.FileName, photo.ContentType, stream), cancellationToken);
             if (!result.IsVerified) return BadRequestProblem(result.Reason ?? "Wajah petugas tidak terverifikasi.");
             session.Open(clock.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -102,11 +108,21 @@ public sealed class FaceAttendanceController(
             return AiUnavailable();
         }
 
-        var rejection = GetRecognitionRejection(recognition, santri.Id, faceOptions.Value.ConfidenceThreshold);
+        Guid? recognizedUserId = null;
+        if (!string.IsNullOrWhiteSpace(recognition.ProviderProfileId))
+        {
+            recognizedUserId = await dbContext.FaceProfiles.AsNoTracking()
+                .Where(x => x.ProviderProfileId == recognition.ProviderProfileId)
+                .Select(x => (Guid?)x.UserId)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var rejection = GetRecognitionRejection(recognition, recognizedUserId, userId, faceOptions.Value.ConfidenceThreshold);
         if (rejection is not null)
         {
-            await SaveReviewEventAsync(session.Id, recognition.SantriId, recognition.Confidence, rejection, cancellationToken);
-            return Ok(new FaceCheckInResponse("review", recognition.SantriId, recognition.Confidence, rejection, null));
+            Guid? recognizedSantriId = recognizedUserId == userId ? santri.Id : null;
+            await SaveReviewEventAsync(session.Id, recognizedSantriId, recognition.Confidence, rejection, cancellationToken);
+            return Ok(new FaceCheckInResponse("review", recognizedSantriId, recognition.Confidence, rejection, null));
         }
 
         var exists = await dbContext.Presensis.AnyAsync(x => x.FaceAttendanceSessionId == session.Id && x.SantriId == santri.Id, cancellationToken);
@@ -156,6 +172,24 @@ public sealed class FaceAttendanceController(
         return Ok(sessions.Select(ToResponse).ToArray());
     }
 
+    [HttpGet("active")]
+    [Authorize(Roles = nameof(UserRole.Santri))]
+    public async Task<ActionResult<FaceAttendanceSessionResponse?>> GetActiveForCurrentSantri(CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        var kelas = await dbContext.Santris.AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.Kelas)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(kelas)) return Unauthorized();
+
+        var session = await dbContext.FaceAttendanceSessions.AsNoTracking()
+            .Where(x => x.Kelas == kelas && x.Status == FaceAttendanceSessionStatus.Open)
+            .OrderByDescending(x => x.VerifiedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+        return Ok(session is null ? null : ToResponse(session));
+    }
+
     [HttpGet("{id:guid}")]
     [Authorize(Policy = AuthorizationPolicies.CanOperateFaceAttendance)]
     public async Task<ActionResult<FaceAttendanceSessionResponse>> GetById(Guid id, CancellationToken cancellationToken)
@@ -186,11 +220,11 @@ public sealed class FaceAttendanceController(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private static string? GetRecognitionRejection(FaceRecognitionResult result, Guid authenticatedSantriId, decimal threshold)
+    private static string? GetRecognitionRejection(FaceRecognitionResult result, Guid? recognizedUserId, Guid authenticatedUserId, decimal threshold)
     {
         if (result.FaceCount != 1) return result.FaceCount > 1 ? "Terdeteksi lebih dari satu wajah; perlu review manual." : "Wajah tidak terdeteksi; perlu review manual.";
-        if (result.SantriId is null) return "Wajah tidak dikenali; perlu review manual.";
-        if (result.SantriId != authenticatedSantriId) return "Identitas wajah tidak sesuai dengan santri yang login; perlu review manual.";
+        if (string.IsNullOrWhiteSpace(result.ProviderProfileId) || recognizedUserId is null) return "Wajah tidak dikenali; perlu review manual.";
+        if (recognizedUserId != authenticatedUserId) return "Identitas wajah tidak sesuai dengan akun yang login; perlu review manual.";
         if (result.Confidence is null || result.Confidence < threshold) return "Confidence pengenalan wajah di bawah ambang aman; perlu review manual.";
         return null;
     }

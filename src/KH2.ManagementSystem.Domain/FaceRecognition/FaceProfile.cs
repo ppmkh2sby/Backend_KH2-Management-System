@@ -5,15 +5,15 @@ namespace KH2.ManagementSystem.Domain.FaceRecognition;
 // Only the opaque identifier held by the private AI service is persisted. Embeddings are never stored here.
 public sealed class FaceProfile : AuditableEntity<Guid>
 {
-    public FaceProfile(Guid id, Guid santriId, string providerProfileId, DateTimeOffset embeddingUpdatedAtUtc)
+    public FaceProfile(Guid id, Guid userId, string providerProfileId, DateTimeOffset embeddingUpdatedAtUtc)
         : base(id)
     {
-        SantriId = santriId;
+        UserId = userId;
         ProviderProfileId = Require(providerProfileId);
         EmbeddingUpdatedAtUtc = embeddingUpdatedAtUtc;
     }
 
-    public Guid SantriId { get; private set; }
+    public Guid UserId { get; private set; }
     public string ProviderProfileId { get; private set; } = string.Empty;
     public DateTimeOffset EmbeddingUpdatedAtUtc { get; private set; }
 

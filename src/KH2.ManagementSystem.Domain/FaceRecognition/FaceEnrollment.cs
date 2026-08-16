@@ -4,14 +4,14 @@ namespace KH2.ManagementSystem.Domain.FaceRecognition;
 
 public sealed class FaceEnrollment : AuditableEntity<Guid>
 {
-    public FaceEnrollment(Guid id, Guid santriId)
+    public FaceEnrollment(Guid id, Guid userId)
         : base(id)
     {
-        SantriId = santriId;
+        UserId = userId;
         Status = FaceEnrollmentStatus.InProgress;
     }
 
-    public Guid SantriId { get; private set; }
+    public Guid UserId { get; private set; }
     public FaceEnrollmentStatus Status { get; private set; }
     public int CaptureCount { get; private set; }
     public DateTimeOffset? RegisteredAtUtc { get; private set; }

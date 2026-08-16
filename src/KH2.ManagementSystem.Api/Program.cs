@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using KH2.ManagementSystem.Api.Options;
 using KH2.ManagementSystem.Application.Abstractions.Messaging;
 using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriAttendance;
@@ -15,6 +17,7 @@ using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedOrigins = GetAllowedOrigins(builder.Configuration);
@@ -23,6 +26,23 @@ builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddHealthChecks();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("FaceRecognition", context =>
+    {
+        var partitionKey = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
 ConfigureForwardedHeaders(builder.Services, builder.Configuration);
 builder.Services.AddCors(options =>
 {
@@ -116,6 +136,7 @@ if (enableHttpsRedirection)
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Ok(new

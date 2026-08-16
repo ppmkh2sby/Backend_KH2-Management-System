@@ -12,8 +12,8 @@ public sealed class FaceProfileConfiguration : IEntityTypeConfiguration<FaceProf
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.ProviderProfileId).HasMaxLength(200).IsRequired();
-        builder.HasIndex(x => x.SantriId).IsUnique();
+        builder.HasIndex(x => x.UserId).IsUnique();
         builder.HasIndex(x => x.ProviderProfileId).IsUnique();
-        builder.HasOne<Domain.Santris.Santri>().WithMany().HasForeignKey(x => x.SantriId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Domain.Users.User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

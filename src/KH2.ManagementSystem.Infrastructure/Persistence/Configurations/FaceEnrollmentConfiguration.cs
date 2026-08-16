@@ -11,11 +11,11 @@ public sealed class FaceEnrollmentConfiguration : IEntityTypeConfiguration<FaceE
         builder.ToTable("FaceEnrollments");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
-        builder.Property(x => x.SantriId).IsRequired();
+        builder.Property(x => x.UserId).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(x => x.CaptureCount).IsRequired();
         builder.Property(x => x.RejectionReason).HasMaxLength(500);
-        builder.HasIndex(x => x.SantriId).IsUnique();
-        builder.HasOne<Domain.Santris.Santri>().WithMany().HasForeignKey(x => x.SantriId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => x.UserId).IsUnique();
+        builder.HasOne<Domain.Users.User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

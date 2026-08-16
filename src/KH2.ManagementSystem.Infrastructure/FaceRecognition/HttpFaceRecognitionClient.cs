@@ -15,10 +15,10 @@ public sealed class HttpFaceRecognitionClient(HttpClient httpClient) : IFaceReco
         return new FaceCaptureValidationResult(body?.IsValid == true, body?.Reason ?? "Capture tidak valid.");
     }
 
-    public async Task<FaceEnrollmentResult> EnrollAsync(Guid santriId, IReadOnlyCollection<FaceImage> images, CancellationToken cancellationToken)
+    public async Task<FaceEnrollmentResult> EnrollAsync(Guid userId, IReadOnlyCollection<FaceImage> images, CancellationToken cancellationToken)
     {
         using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(santriId.ToString()), "santriId");
+        form.Add(new StringContent(userId.ToString()), "userId");
         foreach (var image in images)
         {
             form.Add(CreateImageContent(image), "images", image.FileName);
@@ -29,10 +29,10 @@ public sealed class HttpFaceRecognitionClient(HttpClient httpClient) : IFaceReco
         return new FaceEnrollmentResult(body?.IsAccepted == true, body?.ProviderProfileId, body?.Reason ?? "Profil wajah ditolak.");
     }
 
-    public async Task<FaceOpenerVerificationResult> VerifyOpenerAsync(Guid openerUserId, FaceImage image, CancellationToken cancellationToken)
+    public async Task<FaceOpenerVerificationResult> VerifyOpenerAsync(string providerProfileId, FaceImage image, CancellationToken cancellationToken)
     {
         using var form = CreateImageForm(image);
-        form.Add(new StringContent(openerUserId.ToString()), "openerUserId");
+        form.Add(new StringContent(providerProfileId), "providerProfileId");
         var response = await SendAsync(HttpMethod.Post, "v1/attendance/verify-opener", form, cancellationToken);
         var body = await response.Content.ReadFromJsonAsync<VerificationResponse>(cancellationToken: cancellationToken);
         return new FaceOpenerVerificationResult(body?.IsVerified == true, body?.Reason ?? "Wajah petugas tidak terverifikasi.");
@@ -43,7 +43,7 @@ public sealed class HttpFaceRecognitionClient(HttpClient httpClient) : IFaceReco
         using var form = CreateImageForm(image);
         var response = await SendAsync(HttpMethod.Post, "v1/attendance/recognize", form, cancellationToken);
         var body = await response.Content.ReadFromJsonAsync<RecognitionResponse>(cancellationToken: cancellationToken);
-        return new FaceRecognitionResult(body?.SantriId, body?.Confidence, body?.FaceCount ?? 0, body?.Reason);
+        return new FaceRecognitionResult(body?.ProviderProfileId, body?.Confidence, body?.FaceCount ?? 0, body?.Reason);
     }
 
     public async Task DeleteProfileAsync(string providerProfileId, CancellationToken cancellationToken)
@@ -99,7 +99,7 @@ public sealed class HttpFaceRecognitionClient(HttpClient httpClient) : IFaceReco
     private sealed record CaptureResponse(bool IsValid, string? Reason);
     private sealed record EnrollmentResponse(bool IsAccepted, string? ProviderProfileId, string? Reason);
     private sealed record VerificationResponse(bool IsVerified, string? Reason);
-    private sealed record RecognitionResponse(Guid? SantriId, decimal? Confidence, int? FaceCount, string? Reason);
+    private sealed record RecognitionResponse(string? ProviderProfileId, decimal? Confidence, int? FaceCount, string? Reason);
 }
 
 public sealed class FaceRecognitionUnavailableException : Exception

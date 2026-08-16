@@ -31,8 +31,12 @@ public sealed class CanOperateFaceAttendanceHandler(AppDbContext dbContext)
             .Select(x => x.Tim)
             .FirstOrDefaultAsync();
 
-        if (string.Equals(team, "KTB", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(team, "Ketertiban", StringComparison.OrdinalIgnoreCase))
+        var normalizedTeam = new string((team ?? string.Empty)
+            .Where(char.IsLetter)
+            .ToArray())
+            .ToLowerInvariant();
+
+        if (normalizedTeam is "ktb" or "ketertiban" || normalizedTeam.Contains("ketertiban"))
         {
             context.Succeed(requirement);
         }

@@ -8,12 +8,14 @@ using KH2.ManagementSystem.Infrastructure.FaceRecognition;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace KH2.ManagementSystem.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = nameof(UserRole.Santri))]
+[Authorize(Roles = "Santri,DewanGuru")]
+[EnableRateLimiting("FaceRecognition")]
 [Route("api/v1/face-enrollment/me")]
 public sealed class FaceEnrollmentController(
     AppDbContext dbContext,
@@ -27,11 +29,10 @@ public sealed class FaceEnrollmentController(
     [HttpGet]
     public async Task<ActionResult<FaceEnrollmentResponse>> GetMe(CancellationToken cancellationToken)
     {
-        var santriId = await GetCurrentSantriIdAsync(cancellationToken);
-        if (santriId is null) return Unauthorized();
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
 
         var enrollment = await dbContext.FaceEnrollments.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.SantriId == santriId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         var captured = enrollment is null
             ? []
             : await dbContext.FaceEnrollmentCaptures.AsNoTracking()
@@ -48,8 +49,7 @@ public sealed class FaceEnrollmentController(
         [FromForm] FaceEnrollmentCaptureFormRequest request,
         CancellationToken cancellationToken)
     {
-        var santriId = await GetCurrentSantriIdAsync(cancellationToken);
-        if (santriId is null) return Unauthorized();
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         if (!TryValidatePhoto(request.Photo, out var error)) return BadRequestProblem(error!);
         if (request.CaptureOrder is < 1 or > 5) return BadRequestProblem("captureOrder harus bernilai 1 sampai 5.");
 
@@ -68,13 +68,13 @@ public sealed class FaceEnrollmentController(
         }
 
         var enrollment = await dbContext.FaceEnrollments
-            .FirstOrDefaultAsync(x => x.SantriId == santriId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (enrollment?.Status == FaceEnrollmentStatus.Registered)
         {
             return ConflictProblem("Wajah sudah terdaftar. Reset profil wajah sendiri sebelum mendaftar ulang.");
         }
 
-        enrollment ??= new FaceEnrollment(Guid.NewGuid(), santriId.Value);
+        enrollment ??= new FaceEnrollment(Guid.NewGuid(), userId);
         var exists = await dbContext.FaceEnrollmentCaptures.AnyAsync(
             x => x.EnrollmentId == enrollment.Id && x.Sequence == request.CaptureOrder, cancellationToken);
         if (exists) return ConflictProblem($"Capture ke-{request.CaptureOrder} sudah tersimpan.");
@@ -114,9 +114,8 @@ public sealed class FaceEnrollmentController(
     [HttpPost("complete")]
     public async Task<ActionResult<FaceEnrollmentResponse>> Complete(CancellationToken cancellationToken)
     {
-        var santriId = await GetCurrentSantriIdAsync(cancellationToken);
-        if (santriId is null) return Unauthorized();
-        var enrollment = await dbContext.FaceEnrollments.FirstOrDefaultAsync(x => x.SantriId == santriId, cancellationToken);
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        var enrollment = await dbContext.FaceEnrollments.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (enrollment is null) return ConflictProblem("Lima capture wajah belum tersedia.");
         if (enrollment.Status == FaceEnrollmentStatus.Registered)
         {
@@ -144,7 +143,7 @@ public sealed class FaceEnrollmentController(
                 images.Add(new FaceImage($"{capture.Sequence}.jpg", capture.ContentType, stream));
             }
 
-            var aiResult = await faceRecognitionClient.EnrollAsync(santriId.Value, images, cancellationToken);
+            var aiResult = await faceRecognitionClient.EnrollAsync(userId, images, cancellationToken);
             if (!aiResult.IsAccepted || string.IsNullOrWhiteSpace(aiResult.ProviderProfileId))
             {
                 enrollment.Reject(aiResult.Reason ?? "AI menolak profil wajah.", clock.UtcNow);
@@ -152,8 +151,8 @@ public sealed class FaceEnrollmentController(
                 return BadRequestProblem(aiResult.Reason ?? "AI menolak profil wajah.");
             }
 
-            var profile = await dbContext.FaceProfiles.FirstOrDefaultAsync(x => x.SantriId == santriId, cancellationToken);
-            if (profile is null) dbContext.FaceProfiles.Add(new FaceProfile(Guid.NewGuid(), santriId.Value, aiResult.ProviderProfileId, clock.UtcNow));
+            var profile = await dbContext.FaceProfiles.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+            if (profile is null) dbContext.FaceProfiles.Add(new FaceProfile(Guid.NewGuid(), userId, aiResult.ProviderProfileId, clock.UtcNow));
             else profile.UpdateProviderProfile(aiResult.ProviderProfileId, clock.UtcNow);
             enrollment.Register(clock.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -169,14 +168,52 @@ public sealed class FaceEnrollmentController(
         }
     }
 
+    [HttpDelete("captures/{captureOrder:int}")]
+    public async Task<ActionResult<FaceEnrollmentResponse>> DeleteCapture(int captureOrder, CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        if (captureOrder is < 1 or > 5) return BadRequestProblem("captureOrder harus bernilai 1 sampai 5.");
+
+        var enrollment = await dbContext.FaceEnrollments
+            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        if (enrollment is null) return Ok(ToResponse(null, []));
+        if (enrollment.Status == FaceEnrollmentStatus.Registered)
+        {
+            return ConflictProblem("Wajah sudah terdaftar. Reset profil wajah untuk mendaftar ulang.");
+        }
+
+        var capture = await dbContext.FaceEnrollmentCaptures
+            .FirstOrDefaultAsync(x => x.EnrollmentId == enrollment.Id && x.Sequence == captureOrder, cancellationToken);
+        if (capture is null)
+        {
+            var existingCaptures = await GetCaptureSequencesAsync(enrollment.Id, cancellationToken);
+            return Ok(ToResponse(enrollment, existingCaptures));
+        }
+
+        try
+        {
+            await captureStorage.DeleteAsync(capture.StorageKey, cancellationToken);
+        }
+        catch (IOException)
+        {
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Penyimpanan capture wajah tidak tersedia.");
+        }
+
+        dbContext.FaceEnrollmentCaptures.Remove(capture);
+        var remaining = await dbContext.FaceEnrollmentCaptures.CountAsync(x => x.EnrollmentId == enrollment.Id, cancellationToken) - 1;
+        enrollment.SetCaptureCount(remaining, clock.UtcNow);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var captured = await GetCaptureSequencesAsync(enrollment.Id, cancellationToken);
+        return Ok(ToResponse(enrollment, captured));
+    }
+
     [HttpDelete]
     public async Task<IActionResult> Reset(CancellationToken cancellationToken)
     {
-        var santriId = await GetCurrentSantriIdAsync(cancellationToken);
-        if (santriId is null) return Unauthorized();
-        var enrollment = await dbContext.FaceEnrollments.FirstOrDefaultAsync(x => x.SantriId == santriId, cancellationToken);
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        var enrollment = await dbContext.FaceEnrollments.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (enrollment is null) return NoContent();
-        var profile = await dbContext.FaceProfiles.FirstOrDefaultAsync(x => x.SantriId == santriId, cancellationToken);
+        var profile = await dbContext.FaceProfiles.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         try
         {
             if (profile is not null) await faceRecognitionClient.DeleteProfileAsync(profile.ProviderProfileId, cancellationToken);
@@ -195,11 +232,7 @@ public sealed class FaceEnrollmentController(
         return NoContent();
     }
 
-    private async Task<Guid?> GetCurrentSantriIdAsync(CancellationToken cancellationToken)
-    {
-        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)) return null;
-        return await dbContext.Santris.AsNoTracking().Where(x => x.UserId == userId).Select(x => (Guid?)x.Id).FirstOrDefaultAsync(cancellationToken);
-    }
+    private bool TryGetCurrentUserId(out Guid userId) => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
 
     private async Task<int[]> GetCaptureSequencesAsync(Guid enrollmentId, CancellationToken cancellationToken) =>
         await dbContext.FaceEnrollmentCaptures.AsNoTracking().Where(x => x.EnrollmentId == enrollmentId).Select(x => x.Sequence).ToArrayAsync(cancellationToken);

@@ -15,7 +15,9 @@ public sealed class Presensi : AuditableEntity<Guid>
         Guid kegiatanId,
         Guid? sesiId,
         string? catatan,
-        string waktu)
+        string waktu,
+        PresensiSource source = PresensiSource.Manual,
+        Guid? faceAttendanceSessionId = null)
         : base(id)
     {
         SantriId = santriId;
@@ -25,6 +27,8 @@ public sealed class Presensi : AuditableEntity<Guid>
         SesiId = sesiId;
         Catatan = NormalizeOptional(catatan);
         Waktu = Require(waktu, nameof(waktu));
+        Source = source;
+        FaceAttendanceSessionId = faceAttendanceSessionId;
     }
 
     public Guid SantriId { get; private set; }
@@ -34,6 +38,8 @@ public sealed class Presensi : AuditableEntity<Guid>
     public Guid? SesiId { get; private set; }
     public string? Catatan { get; private set; }
     public string Waktu { get; private set; } = string.Empty;
+    public PresensiSource Source { get; private set; } = PresensiSource.Manual;
+    public Guid? FaceAttendanceSessionId { get; private set; }
 
     public void Update(
         Guid santriId,

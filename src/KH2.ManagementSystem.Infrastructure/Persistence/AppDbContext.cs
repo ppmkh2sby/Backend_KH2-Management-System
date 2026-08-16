@@ -1,4 +1,5 @@
 using KH2.ManagementSystem.Domain.Auth;
+using KH2.ManagementSystem.Domain.FaceRecognition;
 using KH2.ManagementSystem.Domain.Kafarahs;
 using KH2.ManagementSystem.Domain.Kegiatans;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
@@ -30,6 +31,11 @@ public sealed class AppDbContext : DbContext
     public DbSet<WaliSantriRelation> WaliSantriRelations => Set<WaliSantriRelation>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
+    public DbSet<FaceEnrollment> FaceEnrollments => Set<FaceEnrollment>();
+    public DbSet<FaceEnrollmentCapture> FaceEnrollmentCaptures => Set<FaceEnrollmentCapture>();
+    public DbSet<FaceProfile> FaceProfiles => Set<FaceProfile>();
+    public DbSet<FaceAttendanceSession> FaceAttendanceSessions => Set<FaceAttendanceSession>();
+    public DbSet<FaceRecognitionEvent> FaceRecognitionEvents => Set<FaceRecognitionEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

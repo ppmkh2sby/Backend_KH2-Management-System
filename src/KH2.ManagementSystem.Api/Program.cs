@@ -93,6 +93,10 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy(AuthorizationPolicies.CanAccessSantri, policy =>
         policy.Requirements.Add(new CanAccessSantriRequirement()));
+
+    options.AddPolicy(AuthorizationPolicies.CanOperateFaceAttendance, policy =>
+        policy.RequireAuthenticatedUser()
+            .Requirements.Add(new CanOperateFaceAttendanceRequirement()));
 });
 
 var app = builder.Build();
@@ -101,7 +105,14 @@ await InitializeDatabaseAsync(app);
 
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
-app.UseHttpsRedirection();
+var enableHttpsRedirection = app.Configuration.GetValue<bool?>("Https:Enabled")
+    ?? !app.Environment.IsDevelopment();
+
+if (enableHttpsRedirection)
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors("Frontend");
 
 app.UseAuthentication();
@@ -269,5 +280,7 @@ public partial class Program
         "/api/v1/auth/set-email",
         "/api/v1/auth/verify-email",
         "/api/v1/auth/logout"
+        ,"/api/v1/face-enrollment/me"
+        ,"/api/v1/face-attendance/sessions"
     ];
 }

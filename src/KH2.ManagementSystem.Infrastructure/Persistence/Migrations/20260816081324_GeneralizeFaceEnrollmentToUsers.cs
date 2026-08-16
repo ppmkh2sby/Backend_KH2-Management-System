@@ -21,17 +21,17 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
             // Existing rows are keyed by Santri.Id.  Move them to the owning
             // account before the foreign key is changed to Users.Id.
             migrationBuilder.Sql("""
-                UPDATE \"FaceEnrollments\" AS enrollment
-                SET \"SantriId\" = santri.\"UserId\"
-                FROM \"Santris\" AS santri
-                WHERE enrollment.\"SantriId\" = santri.\"Id\";
+                UPDATE "FaceEnrollments" AS enrollment
+                SET "SantriId" = santri."UserId"
+                FROM "Santris" AS santri
+                WHERE enrollment."SantriId" = santri."Id";
                 """);
 
             migrationBuilder.Sql("""
-                UPDATE \"FaceProfiles\" AS profile
-                SET \"SantriId\" = santri.\"UserId\"
-                FROM \"Santris\" AS santri
-                WHERE profile.\"SantriId\" = santri.\"Id\";
+                UPDATE "FaceProfiles" AS profile
+                SET "SantriId" = santri."UserId"
+                FROM "Santris" AS santri
+                WHERE profile."SantriId" = santri."Id";
                 """);
 
             migrationBuilder.RenameColumn(
@@ -83,17 +83,17 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                 table: "FaceProfiles");
 
             migrationBuilder.Sql("""
-                UPDATE \"FaceEnrollments\" AS enrollment
-                SET \"UserId\" = santri.\"Id\"
-                FROM \"Santris\" AS santri
-                WHERE enrollment.\"UserId\" = santri.\"UserId\";
+                UPDATE "FaceEnrollments" AS enrollment
+                SET "UserId" = santri."Id"
+                FROM "Santris" AS santri
+                WHERE enrollment."UserId" = santri."UserId";
                 """);
 
             migrationBuilder.Sql("""
-                UPDATE \"FaceProfiles\" AS profile
-                SET \"UserId\" = santri.\"Id\"
-                FROM \"Santris\" AS santri
-                WHERE profile.\"UserId\" = santri.\"UserId\";
+                UPDATE "FaceProfiles" AS profile
+                SET "UserId" = santri."Id"
+                FROM "Santris" AS santri
+                WHERE profile."UserId" = santri."UserId";
                 """);
 
             migrationBuilder.RenameColumn(

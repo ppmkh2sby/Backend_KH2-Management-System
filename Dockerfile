@@ -1,5 +1,5 @@
-# This must match the SDK pinned by the currently committed global.json.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.200 AS build
+# Keep this in sync with the SDK pinned by global.json.
+FROM mcr.microsoft.com/dotnet/sdk:10.0.300 AS build
 WORKDIR /src
 
 COPY ["global.json", "Directory.Build.props", "KH2.ManagementSystem.slnx", "./"]

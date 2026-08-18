@@ -101,6 +101,231 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceAttendanceSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ClosedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kegiatan")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("KegiatanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kelas")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("OpenerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SesiId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateOnly>("Tanggal")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Waktu")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KegiatanId");
+
+                    b.HasIndex("OpenerUserId");
+
+                    b.HasIndex("SesiId");
+
+                    b.HasIndex("Tanggal", "Status");
+
+                    b.ToTable("FaceAttendanceSessions", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceEnrollment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CaptureCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EmbeddingUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("FaceEnrollments", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceEnrollmentCapture", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EnrollmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Pose")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnrollmentId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("FaceEnrollmentCaptures", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("EmbeddingUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProviderProfileId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderProfileId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("FaceProfiles", (string)null);
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceRecognitionEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("Confidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PresensiId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("SantriId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PresensiId");
+
+                    b.HasIndex("SantriId");
+
+                    b.HasIndex("SessionId", "CapturedAtUtc");
+
+                    b.ToTable("FaceRecognitionEvents", (string)null);
+                });
+
             modelBuilder.Entity("KH2.ManagementSystem.Domain.Kafarahs.Kafarah", b =>
                 {
                     b.Property<Guid>("Id")
@@ -237,6 +462,9 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("FaceAttendanceSessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("KegiatanId")
                         .HasColumnType("uuid");
 
@@ -250,6 +478,13 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("SesiId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Manual");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -273,6 +508,11 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("UpdatedAtUtc");
+
+                    b.HasIndex("FaceAttendanceSessionId", "SantriId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Presensis_FaceAttendanceSessionId_SantriId")
+                        .HasFilter("\"FaceAttendanceSessionId\" IS NOT NULL");
 
                     b.HasIndex("KegiatanId", "Waktu");
 
@@ -511,12 +751,20 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("WaliSantriCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid>("WaliUserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SantriId");
+
+                    b.HasIndex("WaliSantriCode")
+                        .IsUnique();
 
                     b.HasIndex("WaliUserId", "SantriId")
                         .IsUnique();
@@ -529,6 +777,73 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.HasOne("KH2.ManagementSystem.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceAttendanceSession", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Kegiatans.Kegiatan", null)
+                        .WithMany()
+                        .HasForeignKey("KegiatanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KH2.ManagementSystem.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("OpenerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KH2.ManagementSystem.Domain.Sesis.Sesi", null)
+                        .WithMany()
+                        .HasForeignKey("SesiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceEnrollment", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceEnrollmentCapture", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.FaceRecognition.FaceEnrollment", null)
+                        .WithMany()
+                        .HasForeignKey("EnrollmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceProfile", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceRecognitionEvent", b =>
+                {
+                    b.HasOne("KH2.ManagementSystem.Domain.Presensis.Presensi", null)
+                        .WithMany()
+                        .HasForeignKey("PresensiId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("KH2.ManagementSystem.Domain.Santris.Santri", null)
+                        .WithMany()
+                        .HasForeignKey("SantriId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("KH2.ManagementSystem.Domain.FaceRecognition.FaceAttendanceSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -553,6 +868,11 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("KH2.ManagementSystem.Domain.Presensis.Presensi", b =>
                 {
+                    b.HasOne("KH2.ManagementSystem.Domain.FaceRecognition.FaceAttendanceSession", null)
+                        .WithMany()
+                        .HasForeignKey("FaceAttendanceSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("KH2.ManagementSystem.Domain.Kegiatans.Kegiatan", null)
                         .WithMany()
                         .HasForeignKey("KegiatanId")

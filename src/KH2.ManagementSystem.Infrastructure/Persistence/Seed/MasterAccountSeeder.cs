@@ -208,6 +208,7 @@ public sealed class MasterAccountSeeder(
                 if (existing is not null)
                 {
                     existing.ChangeRelationshipLabel("Orang Tua");
+                    existing.ChangeWaliSantriCode(BuildWaliSantriCode(nis));
                     continue;
                 }
 
@@ -216,10 +217,24 @@ public sealed class MasterAccountSeeder(
                         Guid.NewGuid(),
                         waliUser.Id,
                         santri.Id,
-                        "Orang Tua"),
+                        "Orang Tua",
+                        BuildWaliSantriCode(nis)),
                     cancellationToken);
             }
         }
+    }
+
+    private static string BuildWaliSantriCode(string santriNis)
+    {
+        var normalizedNis = santriNis.Trim();
+
+        if (normalizedNis.Length < 3 || normalizedNis.Any(character => !char.IsDigit(character)))
+        {
+            throw new InvalidOperationException(
+                $"Santri NIS '{santriNis}' must contain at least three digits to build a wali santri code.");
+        }
+
+        return $"354{normalizedNis[2..]}";
     }
 
     private async Task<IReadOnlyList<(Kegiatan Kegiatan, Sesi Sesi)>> EnsureSeedSessionsAsync(

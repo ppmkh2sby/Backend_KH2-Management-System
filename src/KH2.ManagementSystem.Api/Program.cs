@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using KH2.ManagementSystem.Api.Options;
 using KH2.ManagementSystem.Application.Abstractions.Messaging;
 using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriAttendance;
@@ -15,6 +17,7 @@ using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedOrigins = GetAllowedOrigins(builder.Configuration);
@@ -23,6 +26,23 @@ builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddHealthChecks();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("FaceRecognition", context =>
+    {
+        var partitionKey = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
 ConfigureForwardedHeaders(builder.Services, builder.Configuration);
 builder.Services.AddCors(options =>
 {
@@ -93,6 +113,10 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy(AuthorizationPolicies.CanAccessSantri, policy =>
         policy.Requirements.Add(new CanAccessSantriRequirement()));
+
+    options.AddPolicy(AuthorizationPolicies.CanOperateFaceAttendance, policy =>
+        policy.RequireAuthenticatedUser()
+            .Requirements.Add(new CanOperateFaceAttendanceRequirement()));
 });
 
 var app = builder.Build();
@@ -101,11 +125,31 @@ await InitializeDatabaseAsync(app);
 
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
-app.UseHttpsRedirection();
+var enableHttpsRedirection = app.Configuration.GetValue<bool?>("Https:Enabled")
+    ?? !app.Environment.IsDevelopment();
+
+if (enableHttpsRedirection)
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
+
+app.MapGet("/api/v1/public/santri-total", async (
+    AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var totalCount = await dbContext.Users
+        .AsNoTracking()
+        .CountAsync(user => user.Role == UserRole.Santri, cancellationToken);
+
+    return Results.Ok(new { totalCount });
+})
+    .AllowAnonymous();
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -259,6 +303,7 @@ public partial class Program
         "/api/v1/progress-keilmuan/sync",
         "/api/v1/log-keluar-masuk",
         "/api/v1/santri",
+        "/api/v1/public/santri-total",
         "/api/v1/dashboard/santri/me",
         "/api/v1/dashboard/santri/me/presensi",
         "/api/v1/dashboard/santri/me/progres-keilmuan",
@@ -269,5 +314,7 @@ public partial class Program
         "/api/v1/auth/set-email",
         "/api/v1/auth/verify-email",
         "/api/v1/auth/logout"
+        ,"/api/v1/face-enrollment/me"
+        ,"/api/v1/face-attendance/sessions"
     ];
 }

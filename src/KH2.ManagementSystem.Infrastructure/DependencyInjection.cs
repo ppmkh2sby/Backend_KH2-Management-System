@@ -12,6 +12,8 @@ using KH2.ManagementSystem.Infrastructure.Dashboard;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using KH2.ManagementSystem.Application.Abstractions.Security;
 using KH2.ManagementSystem.Infrastructure.Security;
+using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
+using KH2.ManagementSystem.Infrastructure.FaceRecognition;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +64,14 @@ public static class DependencyInjection
         services.AddOptions<DevelopmentAuthorizationOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthorizationOptions.SectionName));
 
+        services.AddOptions<FaceRecognitionOptions>()
+            .Bind(configuration.GetSection(FaceRecognitionOptions.SectionName))
+            .Validate(x => Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out var uri) && !uri.IsLoopback, "FaceRecognition:BaseUrl must be a private service URI.")
+            .Validate(x => x.ServiceApiKey.Trim().Length >= 32, "FaceRecognition:ServiceApiKey must be at least 32 characters.")
+            .Validate(x => x.ConfidenceThreshold is > 0m and <= 1m, "FaceRecognition:ConfidenceThreshold must be between 0 and 1.")
+            .Validate(x => x.TimeoutSeconds is > 0 and <= 60, "FaceRecognition:TimeoutSeconds must be between 1 and 60.")
+            .ValidateOnStart();
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -97,6 +107,7 @@ public static class DependencyInjection
         services.AddScoped<ISantriAccessReader, AppDbSantriAccessReader>();
         services.AddScoped<ISantriDashboardReader, SantriDashboardReader>();
         services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
+        services.AddScoped<IAuthorizationHandler, CanOperateFaceAttendanceHandler>();
         services.AddScoped<IUserAuthenticator, CompositeUserAuthenticator>();
 
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
@@ -104,6 +115,14 @@ public static class DependencyInjection
         services.AddScoped<IEmailVerificationCodeService, EmailVerificationCodeService>();
         services.AddScoped<MasterAccountSeeder>();
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IFaceCaptureStorage, LocalPrivateFaceCaptureStorage>();
+        services.AddHttpClient<IFaceRecognitionClient, HttpFaceRecognitionClient>((serviceProvider, client) =>
+        {
+            var faceOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<FaceRecognitionOptions>>().Value;
+            client.BaseAddress = new Uri(faceOptions.BaseUrl, UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(faceOptions.TimeoutSeconds);
+            client.DefaultRequestHeaders.Add("X-Face-Service-Key", faceOptions.ServiceApiKey);
+        });
 
         return services;
     }

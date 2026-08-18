@@ -255,6 +255,35 @@ public sealed class SantriDashboardReader(
                 BuildProfile(user.FullName, user.Role, user.EmailConfirmed, ownSantri, "self"));
         }
 
+        if (user.Role == UserRole.WaliSantri)
+        {
+            var linkedSantri = await (
+                from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                where relation.WaliUserId == userId
+                orderby santri.Nis
+                select new SantriProjection(
+                    santri.Id,
+                    santri.FullName,
+                    santri.Nis,
+                    santri.Kampus,
+                    santri.Jurusan,
+                    santri.Gender,
+                    santri.Tim,
+                    santri.Kelas))
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (linkedSantri is null)
+            {
+                return null;
+            }
+
+            return new DashboardContext(
+                linkedSantri.Id,
+                linkedSantri.Tim,
+                BuildProfile(user.FullName, user.Role, user.EmailConfirmed, linkedSantri, "wali-relation"));
+        }
+
         var fallbackSantri = await dbContext.Santris
             .AsNoTracking()
             .OrderBy(x => x.CreatedAtUtc)

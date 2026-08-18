@@ -37,6 +37,14 @@ public sealed class PresensiConfiguration : IEntityTypeConfiguration<Presensi>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(x => x.Source)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(PresensiSource.Manual)
+            .IsRequired();
+
+        builder.Property(x => x.FaceAttendanceSessionId);
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 
@@ -50,6 +58,10 @@ public sealed class PresensiConfiguration : IEntityTypeConfiguration<Presensi>
         builder.HasIndex(x => new { x.SesiId, x.SantriId });
         builder.HasIndex(x => new { x.SesiId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.KegiatanId, x.Waktu });
+        builder.HasIndex(x => new { x.FaceAttendanceSessionId, x.SantriId })
+            .IsUnique()
+            .HasFilter("\"FaceAttendanceSessionId\" IS NOT NULL")
+            .HasDatabaseName("UX_Presensis_FaceAttendanceSessionId_SantriId");
         builder.HasIndex(x => x.CreatedAtUtc)
             .HasFilter("\"SesiId\" IS NULL")
             .HasDatabaseName("IX_Presensis_CreatedAtUtc_LegacyNullSesi");
@@ -68,5 +80,10 @@ public sealed class PresensiConfiguration : IEntityTypeConfiguration<Presensi>
             .WithMany()
             .HasForeignKey(x => x.SesiId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne<Domain.FaceRecognition.FaceAttendanceSession>()
+            .WithMany()
+            .HasForeignKey(x => x.FaceAttendanceSessionId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

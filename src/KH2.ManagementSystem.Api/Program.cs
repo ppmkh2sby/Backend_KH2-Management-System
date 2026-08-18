@@ -139,6 +139,18 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
+app.MapGet("/api/v1/public/santri-total", async (
+    AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var totalCount = await dbContext.Users
+        .AsNoTracking()
+        .CountAsync(user => user.Role == UserRole.Santri, cancellationToken);
+
+    return Results.Ok(new { totalCount });
+})
+    .AllowAnonymous();
+
 app.MapGet("/", () => Results.Ok(new
 {
     status = "running",
@@ -291,6 +303,7 @@ public partial class Program
         "/api/v1/progress-keilmuan/sync",
         "/api/v1/log-keluar-masuk",
         "/api/v1/santri",
+        "/api/v1/public/santri-total",
         "/api/v1/dashboard/santri/me",
         "/api/v1/dashboard/santri/me/presensi",
         "/api/v1/dashboard/santri/me/progres-keilmuan",

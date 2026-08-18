@@ -1,5 +1,6 @@
 using KH2.ManagementSystem.Application.Abstractions.Authentication;
 using KH2.ManagementSystem.Application.Abstractions.Security;
+using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,22 @@ public sealed class DbUserAuthenticator(
                 x => x.Username == normalizedIdentity ||
                      (x.Email != null && x.Email == normalizedEmail),
                 cancellationToken);
+
+        if (user is null)
+        {
+            var waliUserId = await dbContext.WaliSantriRelations
+                .Where(x => x.WaliSantriCode == normalizedIdentity)
+                .Select(x => (Guid?)x.WaliUserId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (waliUserId.HasValue)
+            {
+                user = await dbContext.Users
+                    .FirstOrDefaultAsync(
+                        x => x.Id == waliUserId.Value && x.Role == UserRole.WaliSantri,
+                        cancellationToken);
+            }
+        }
 
         if (user is null || !user.IsActive)
         {

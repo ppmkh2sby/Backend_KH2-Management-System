@@ -23,6 +23,17 @@ public sealed class WaliSantriRelation : AuditableEntity<Guid>
     public string RelationshipLabel { get; private set; } = string.Empty;
     public string WaliSantriCode { get; private set; } = string.Empty;
 
+    public void AssignTo(Guid waliUserId)
+    {
+        if (waliUserId == Guid.Empty)
+        {
+            throw new ArgumentException("Wali user id is required.", nameof(waliUserId));
+        }
+
+        WaliUserId = waliUserId;
+        Touch(DateTimeOffset.UtcNow);
+    }
+
     public void ChangeRelationshipLabel(string relationshipLabel)
     {
         if (string.IsNullOrWhiteSpace(relationshipLabel))

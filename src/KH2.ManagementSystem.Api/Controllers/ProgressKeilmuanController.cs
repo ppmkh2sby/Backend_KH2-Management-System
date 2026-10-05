@@ -88,16 +88,13 @@ public sealed class ProgressKeilmuanController(
 
         if (context.Role == UserRole.WaliSantri)
         {
-            var firstChildCode = await dbContext.WaliSantriRelations
-                .AsNoTracking()
-                .Where(x => x.WaliUserId == context.UserId)
-                .Join(
-                    dbContext.Santris.AsNoTracking(),
-                    relation => relation.SantriId,
-                    santri => santri.Id,
-                    (_, santri) => new { santri.FullName, santri.Nis })
-                .OrderBy(x => x.FullName)
-                .Select(x => x.Nis)
+            var firstChildCode = await (
+                    from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                    join user in dbContext.Users.AsNoTracking() on relation.WaliUserId equals user.Id
+                    join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                    where relation.WaliUserId == context.UserId &&
+                          relation.WaliSantriCode == user.Username
+                    select santri.Nis)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (string.IsNullOrWhiteSpace(firstChildCode))

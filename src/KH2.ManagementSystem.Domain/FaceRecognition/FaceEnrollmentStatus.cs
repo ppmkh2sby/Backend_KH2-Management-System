@@ -1,8 +1,3 @@
 namespace KH2.ManagementSystem.Domain.FaceRecognition;
 
-public enum FaceEnrollmentStatus
-{
-    InProgress = 1,
-    Registered = 2,
-    Rejected = 3
-}
+public enum FaceEnrollmentStatus { Pending = 1, Active = 2, Superseded = 3, Failed = 4, Registered = Active }

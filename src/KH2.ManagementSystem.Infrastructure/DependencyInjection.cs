@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Pgvector.EntityFrameworkCore;
 
 namespace KH2.ManagementSystem.Infrastructure;
 
@@ -30,6 +31,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        services.AddFaceRecognitionServiceContracts(configuration);
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -98,10 +100,11 @@ public static class DependencyInjection
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
+        connectionString = PostgreSqlConnectionString.Normalize(connectionString);
 
         services.AddDbContext<AppDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(connectionString, npgsqlOptions => npgsqlOptions.UseVector());
         });
 
         services.AddScoped<ISantriAccessReader, AppDbSantriAccessReader>();

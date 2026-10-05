@@ -15,6 +15,8 @@ using KH2.ManagementSystem.Infrastructure.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
+using KH2.ManagementSystem.Infrastructure.Health;
+using KH2.ManagementSystem.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -25,7 +27,9 @@ var allowedOrigins = GetAllowedOrigins(builder.Configuration);
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
+    .AddCheck<FaceServiceHealthCheck>("face-service", tags: ["ready"]);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -37,6 +41,20 @@ builder.Services.AddRateLimiter(options =>
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+    options.AddPolicy("FaceAttendanceDevice", context =>
+    {
+        var deviceId = context.Request.Headers["X-Attendance-Device-Id"].FirstOrDefault();
+        var partitionKey = Guid.TryParse(deviceId, out var parsedDeviceId)
+            ? parsedDeviceId.ToString("N")
+            : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter($"face-attendance:{partitionKey}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
@@ -123,6 +141,7 @@ var app = builder.Build();
 
 await InitializeDatabaseAsync(app);
 
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
 var enableHttpsRedirection = app.Configuration.GetValue<bool?>("Https:Enabled")
@@ -160,6 +179,14 @@ app.MapGet("/", () => Results.Ok(new
 
 app.MapGet("/scalar", () => Results.Redirect("/"));
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+});
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 app.MapControllers();
 
 app.Run();
@@ -316,5 +343,6 @@ public partial class Program
         "/api/v1/auth/logout"
         ,"/api/v1/face-enrollment/me"
         ,"/api/v1/face-attendance/sessions"
+        ,"/api/attendance/face-recognition"
     ];
 }

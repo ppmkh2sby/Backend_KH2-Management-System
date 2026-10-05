@@ -56,6 +56,10 @@ public sealed class PresensiConfiguration : IEntityTypeConfiguration<Presensi>
         builder.HasIndex(x => new { x.SantriId, x.Status });
         builder.HasIndex(x => new { x.SantriId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.SesiId, x.SantriId });
+        builder.HasIndex(x => new { x.SesiId, x.SantriId })
+            .IsUnique()
+            .HasFilter("\"SesiId\" IS NOT NULL")
+            .HasDatabaseName("UX_Presensis_SesiId_SantriId");
         builder.HasIndex(x => new { x.SesiId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.KegiatanId, x.Waktu });
         builder.HasIndex(x => new { x.FaceAttendanceSessionId, x.SantriId })

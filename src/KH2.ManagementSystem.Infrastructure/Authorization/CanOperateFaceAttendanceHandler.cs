@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
+using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -31,12 +32,7 @@ public sealed class CanOperateFaceAttendanceHandler(AppDbContext dbContext)
             .Select(x => x.Tim)
             .FirstOrDefaultAsync();
 
-        var normalizedTeam = new string((team ?? string.Empty)
-            .Where(char.IsLetter)
-            .ToArray())
-            .ToLowerInvariant();
-
-        if (normalizedTeam is "ktb" or "ketertiban" || normalizedTeam.Contains("ketertiban"))
+        if (SantriTeam.IsKetertiban(team))
         {
             context.Succeed(requirement);
         }

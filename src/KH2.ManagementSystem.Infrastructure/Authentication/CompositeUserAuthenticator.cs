@@ -38,22 +38,6 @@ public sealed class CompositeUserAuthenticator(
                      (x.Email != null && x.Email == normalizedEmail),
                 cancellationToken);
 
-        if (user is null)
-        {
-            var waliUserId = await dbContext.WaliSantriRelations
-                .Where(x => x.WaliSantriCode == normalizedIdentity)
-                .Select(x => (Guid?)x.WaliUserId)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (waliUserId.HasValue)
-            {
-                user = await dbContext.Users
-                    .FirstOrDefaultAsync(
-                        x => x.Id == waliUserId.Value && x.Role == UserRole.WaliSantri,
-                        cancellationToken);
-            }
-        }
-
         if (user is null || !user.IsActive)
         {
             return null;

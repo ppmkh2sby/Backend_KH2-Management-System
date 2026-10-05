@@ -63,7 +63,7 @@ public sealed class FaceAttendanceController(
         if (session.OpenerUserId != userId) return Forbid();
         if (session.Status == FaceAttendanceSessionStatus.Closed) return ConflictProblem("Sesi telah ditutup.");
 
-        var profile = await dbContext.FaceProfiles.AsNoTracking()
+        var profile = await dbContext.ProviderFaceProfiles.AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (profile is null) return BadRequestProblem("Daftarkan wajah Anda terlebih dahulu sebelum membuka presensi wajah.");
 
@@ -111,7 +111,7 @@ public sealed class FaceAttendanceController(
         Guid? recognizedUserId = null;
         if (!string.IsNullOrWhiteSpace(recognition.ProviderProfileId))
         {
-            recognizedUserId = await dbContext.FaceProfiles.AsNoTracking()
+            recognizedUserId = await dbContext.ProviderFaceProfiles.AsNoTracking()
                 .Where(x => x.ProviderProfileId == recognition.ProviderProfileId)
                 .Select(x => (Guid?)x.UserId)
                 .FirstOrDefaultAsync(cancellationToken);
@@ -130,9 +130,9 @@ public sealed class FaceAttendanceController(
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var presensi = new Presensi(Guid.NewGuid(), santri.Id, santri.FullName, "hadir", session.KegiatanId, session.SesiId, "Face recognition", session.Waktu, PresensiSource.FaceRecognition, session.Id);
-        var acceptedEvent = new FaceRecognitionEvent(Guid.NewGuid(), session.Id, santri.Id, recognition.Confidence, clock.UtcNow, FaceRecognitionEventStatus.Accepted, null);
+        var acceptedEvent = new LegacyFaceRecognitionEvent(Guid.NewGuid(), session.Id, santri.Id, recognition.Confidence, clock.UtcNow, FaceRecognitionEventStatus.Accepted, null);
         dbContext.Presensis.Add(presensi);
-        dbContext.FaceRecognitionEvents.Add(acceptedEvent);
+        dbContext.LegacyFaceRecognitionEvents.Add(acceptedEvent);
         acceptedEvent.Accept(presensi.Id, clock.UtcNow);
         try
         {
@@ -204,7 +204,7 @@ public sealed class FaceAttendanceController(
     {
         if (!await dbContext.FaceAttendanceSessions.AnyAsync(x => x.Id == id, cancellationToken)) return NotFound();
         var rows = await (
-            from evt in dbContext.FaceRecognitionEvents.AsNoTracking()
+            from evt in dbContext.LegacyFaceRecognitionEvents.AsNoTracking()
             join santri in dbContext.Santris.AsNoTracking() on evt.SantriId equals santri.Id into santriRows
             from santri in santriRows.DefaultIfEmpty()
             where evt.SessionId == id
@@ -216,7 +216,7 @@ public sealed class FaceAttendanceController(
 
     private async Task SaveReviewEventAsync(Guid sessionId, Guid? recognizedSantriId, decimal? confidence, string reason, CancellationToken cancellationToken)
     {
-        dbContext.FaceRecognitionEvents.Add(new FaceRecognitionEvent(Guid.NewGuid(), sessionId, recognizedSantriId, confidence, clock.UtcNow, FaceRecognitionEventStatus.Review, reason));
+        dbContext.LegacyFaceRecognitionEvents.Add(new LegacyFaceRecognitionEvent(Guid.NewGuid(), sessionId, recognizedSantriId, confidence, clock.UtcNow, FaceRecognitionEventStatus.Review, reason));
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

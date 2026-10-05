@@ -9,14 +9,19 @@ public sealed class LocalPrivateFaceCaptureStorage(IOptions<FaceRecognitionOptio
 
     public async Task<StoredFaceCapture> SaveAsync(Guid enrollmentId, int sequence, string fileName, string contentType, Stream content, CancellationToken cancellationToken)
     {
-        var extension = Path.GetExtension(fileName);
-        extension = string.IsNullOrWhiteSpace(extension) ? ".jpg" : extension.ToLowerInvariant();
+        var extension = contentType switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            _ => throw new ArgumentException("Unsupported face capture content type.", nameof(contentType))
+        };
         var relativeKey = Path.Combine(enrollmentId.ToString("N"), $"{sequence}{extension}");
         var destination = GetPath(relativeKey);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         await content.CopyToAsync(target, cancellationToken);
-        return new StoredFaceCapture(relativeKey.Replace('\\', '/'), contentType, Path.GetFileName(fileName));
+        return new StoredFaceCapture(relativeKey.Replace('\\', '/'), contentType, $"capture-{sequence}{extension}");
     }
 
     public Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken)

@@ -31,11 +31,11 @@ public sealed class FaceEnrollmentController(
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
 
-        var enrollment = await dbContext.FaceEnrollments.AsNoTracking()
+        var enrollment = await dbContext.LegacyFaceEnrollments.AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         var captured = enrollment is null
             ? []
-            : await dbContext.FaceEnrollmentCaptures.AsNoTracking()
+            : await dbContext.LegacyFaceEnrollmentCaptures.AsNoTracking()
                 .Where(x => x.EnrollmentId == enrollment.Id)
                 .Select(x => x.Sequence)
                 .ToArrayAsync(cancellationToken);
@@ -67,15 +67,15 @@ public sealed class FaceEnrollmentController(
             return AiUnavailable();
         }
 
-        var enrollment = await dbContext.FaceEnrollments
+        var enrollment = await dbContext.LegacyFaceEnrollments
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
-        if (enrollment?.Status == FaceEnrollmentStatus.Registered)
+        if (enrollment?.Status == LegacyFaceEnrollmentStatus.Registered)
         {
             return ConflictProblem("Wajah sudah terdaftar. Reset profil wajah sendiri sebelum mendaftar ulang.");
         }
 
-        enrollment ??= new FaceEnrollment(Guid.NewGuid(), userId);
-        var exists = await dbContext.FaceEnrollmentCaptures.AnyAsync(
+        enrollment ??= new LegacyFaceEnrollment(Guid.NewGuid(), userId);
+        var exists = await dbContext.LegacyFaceEnrollmentCaptures.AnyAsync(
             x => x.EnrollmentId == enrollment.Id && x.Sequence == request.CaptureOrder, cancellationToken);
         if (exists) return ConflictProblem($"Capture ke-{request.CaptureOrder} sudah tersimpan.");
 
@@ -92,9 +92,9 @@ public sealed class FaceEnrollmentController(
 
         try
         {
-            if (dbContext.Entry(enrollment).State == EntityState.Detached) dbContext.FaceEnrollments.Add(enrollment);
-            dbContext.FaceEnrollmentCaptures.Add(new FaceEnrollmentCapture(Guid.NewGuid(), enrollment.Id, request.CaptureOrder, expectedPose, stored.StorageKey, stored.ContentType));
-            var total = await dbContext.FaceEnrollmentCaptures.CountAsync(x => x.EnrollmentId == enrollment.Id, cancellationToken) + 1;
+            if (dbContext.Entry(enrollment).State == EntityState.Detached) dbContext.LegacyFaceEnrollments.Add(enrollment);
+            dbContext.LegacyFaceEnrollmentCaptures.Add(new LegacyFaceEnrollmentCapture(Guid.NewGuid(), enrollment.Id, request.CaptureOrder, expectedPose, stored.StorageKey, stored.ContentType));
+            var total = await dbContext.LegacyFaceEnrollmentCaptures.CountAsync(x => x.EnrollmentId == enrollment.Id, cancellationToken) + 1;
             enrollment.SetCaptureCount(total, clock.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
             return Ok(new FaceEnrollmentCaptureResponse(request.CaptureOrder, expectedPose, total, "proses"));
@@ -115,15 +115,19 @@ public sealed class FaceEnrollmentController(
     public async Task<ActionResult<FaceEnrollmentResponse>> Complete(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
-        var enrollment = await dbContext.FaceEnrollments.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        var enrollment = await dbContext.LegacyFaceEnrollments.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (enrollment is null) return ConflictProblem("Lima capture wajah belum tersedia.");
-        if (enrollment.Status == FaceEnrollmentStatus.Registered)
+        if (enrollment.Status == LegacyFaceEnrollmentStatus.Registered)
         {
-            var existingCaptures = await GetCaptureSequencesAsync(enrollment.Id, cancellationToken);
-            return Ok(ToResponse(enrollment, existingCaptures));
+            var staleCaptures = await dbContext.LegacyFaceEnrollmentCaptures
+                .Where(x => x.EnrollmentId == enrollment.Id)
+                .ToListAsync(cancellationToken);
+            if (!await DeleteTemporaryCapturesAsync(staleCaptures, cancellationToken))
+                return CaptureStorageUnavailable();
+            return Ok(ToResponse(enrollment, []));
         }
 
-        var captures = await dbContext.FaceEnrollmentCaptures
+        var captures = await dbContext.LegacyFaceEnrollmentCaptures
             .Where(x => x.EnrollmentId == enrollment.Id && x.IsValid)
             .OrderBy(x => x.Sequence)
             .ToListAsync(cancellationToken);
@@ -148,15 +152,19 @@ public sealed class FaceEnrollmentController(
             {
                 enrollment.Reject(aiResult.Reason ?? "AI menolak profil wajah.", clock.UtcNow);
                 await dbContext.SaveChangesAsync(cancellationToken);
+                await DisposeStreamsAsync(streams);
+                if (!await DeleteTemporaryCapturesAsync(captures, cancellationToken)) return CaptureStorageUnavailable();
                 return BadRequestProblem(aiResult.Reason ?? "AI menolak profil wajah.");
             }
 
-            var profile = await dbContext.FaceProfiles.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
-            if (profile is null) dbContext.FaceProfiles.Add(new FaceProfile(Guid.NewGuid(), userId, aiResult.ProviderProfileId, clock.UtcNow));
+            var profile = await dbContext.ProviderFaceProfiles.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+            if (profile is null) dbContext.ProviderFaceProfiles.Add(new ProviderFaceProfile(Guid.NewGuid(), userId, aiResult.ProviderProfileId, clock.UtcNow));
             else profile.UpdateProviderProfile(aiResult.ProviderProfileId, clock.UtcNow);
             enrollment.Register(clock.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
-            return Ok(ToResponse(enrollment, captures.Select(x => x.Sequence).ToArray()));
+            await DisposeStreamsAsync(streams);
+            if (!await DeleteTemporaryCapturesAsync(captures, cancellationToken)) return CaptureStorageUnavailable();
+            return Ok(ToResponse(enrollment, []));
         }
         catch (FaceRecognitionUnavailableException)
         {
@@ -164,7 +172,7 @@ public sealed class FaceEnrollmentController(
         }
         finally
         {
-            foreach (var stream in streams) await stream.DisposeAsync();
+            await DisposeStreamsAsync(streams);
         }
     }
 
@@ -174,15 +182,15 @@ public sealed class FaceEnrollmentController(
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         if (captureOrder is < 1 or > 5) return BadRequestProblem("captureOrder harus bernilai 1 sampai 5.");
 
-        var enrollment = await dbContext.FaceEnrollments
+        var enrollment = await dbContext.LegacyFaceEnrollments
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (enrollment is null) return Ok(ToResponse(null, []));
-        if (enrollment.Status == FaceEnrollmentStatus.Registered)
+        if (enrollment.Status == LegacyFaceEnrollmentStatus.Registered)
         {
             return ConflictProblem("Wajah sudah terdaftar. Reset profil wajah untuk mendaftar ulang.");
         }
 
-        var capture = await dbContext.FaceEnrollmentCaptures
+        var capture = await dbContext.LegacyFaceEnrollmentCaptures
             .FirstOrDefaultAsync(x => x.EnrollmentId == enrollment.Id && x.Sequence == captureOrder, cancellationToken);
         if (capture is null)
         {
@@ -199,8 +207,8 @@ public sealed class FaceEnrollmentController(
             return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Penyimpanan capture wajah tidak tersedia.");
         }
 
-        dbContext.FaceEnrollmentCaptures.Remove(capture);
-        var remaining = await dbContext.FaceEnrollmentCaptures.CountAsync(x => x.EnrollmentId == enrollment.Id, cancellationToken) - 1;
+        dbContext.LegacyFaceEnrollmentCaptures.Remove(capture);
+        var remaining = await dbContext.LegacyFaceEnrollmentCaptures.CountAsync(x => x.EnrollmentId == enrollment.Id, cancellationToken) - 1;
         enrollment.SetCaptureCount(remaining, clock.UtcNow);
         await dbContext.SaveChangesAsync(cancellationToken);
         var captured = await GetCaptureSequencesAsync(enrollment.Id, cancellationToken);
@@ -211,9 +219,9 @@ public sealed class FaceEnrollmentController(
     public async Task<IActionResult> Reset(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
-        var enrollment = await dbContext.FaceEnrollments.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        var enrollment = await dbContext.LegacyFaceEnrollments.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (enrollment is null) return NoContent();
-        var profile = await dbContext.FaceProfiles.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        var profile = await dbContext.ProviderFaceProfiles.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         try
         {
             if (profile is not null) await faceRecognitionClient.DeleteProfileAsync(profile.ProviderProfileId, cancellationToken);
@@ -223,11 +231,11 @@ public sealed class FaceEnrollmentController(
             return AiUnavailable();
         }
 
-        var captures = await dbContext.FaceEnrollmentCaptures.Where(x => x.EnrollmentId == enrollment.Id).ToListAsync(cancellationToken);
+        var captures = await dbContext.LegacyFaceEnrollmentCaptures.Where(x => x.EnrollmentId == enrollment.Id).ToListAsync(cancellationToken);
         foreach (var capture in captures) await captureStorage.DeleteAsync(capture.StorageKey, cancellationToken);
-        dbContext.FaceEnrollmentCaptures.RemoveRange(captures);
-        if (profile is not null) dbContext.FaceProfiles.Remove(profile);
-        dbContext.FaceEnrollments.Remove(enrollment);
+        dbContext.LegacyFaceEnrollmentCaptures.RemoveRange(captures);
+        if (profile is not null) dbContext.ProviderFaceProfiles.Remove(profile);
+        dbContext.LegacyFaceEnrollments.Remove(enrollment);
         await dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -235,10 +243,36 @@ public sealed class FaceEnrollmentController(
     private bool TryGetCurrentUserId(out Guid userId) => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
 
     private async Task<int[]> GetCaptureSequencesAsync(Guid enrollmentId, CancellationToken cancellationToken) =>
-        await dbContext.FaceEnrollmentCaptures.AsNoTracking().Where(x => x.EnrollmentId == enrollmentId).Select(x => x.Sequence).ToArrayAsync(cancellationToken);
+        await dbContext.LegacyFaceEnrollmentCaptures.AsNoTracking().Where(x => x.EnrollmentId == enrollmentId).Select(x => x.Sequence).ToArrayAsync(cancellationToken);
 
-    private static FaceEnrollmentResponse ToResponse(FaceEnrollment? enrollment, IEnumerable<int> captured) => new(
-        enrollment is null ? "belum-terdaftar" : enrollment.Status switch { FaceEnrollmentStatus.InProgress => "proses", FaceEnrollmentStatus.Registered => "terdaftar", _ => "ditolak" },
+    private async Task<bool> DeleteTemporaryCapturesAsync(
+        List<LegacyFaceEnrollmentCapture> captures,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            foreach (var capture in captures)
+                await captureStorage.DeleteAsync(capture.StorageKey, cancellationToken);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+
+        if (captures.Count == 0) return true;
+        dbContext.LegacyFaceEnrollmentCaptures.RemoveRange(captures);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private static async Task DisposeStreamsAsync(IEnumerable<Stream> streams)
+    {
+        foreach (var stream in streams)
+            await stream.DisposeAsync();
+    }
+
+    private static FaceEnrollmentResponse ToResponse(LegacyFaceEnrollment? enrollment, IEnumerable<int> captured) => new(
+        enrollment is null ? "belum-terdaftar" : enrollment.Status switch { LegacyFaceEnrollmentStatus.InProgress => "proses", LegacyFaceEnrollmentStatus.Registered => "terdaftar", _ => "ditolak" },
         enrollment?.CaptureCount ?? 0, 5,
         Poses.Select((pose, index) => new FaceCaptureGuideResponse(index + 1, pose, captured.Contains(index + 1))).ToArray(),
         enrollment?.RegisteredAtUtc, enrollment?.EmbeddingUpdatedAtUtc, enrollment?.RejectionReason);
@@ -252,6 +286,7 @@ public sealed class FaceEnrollmentController(
     }
 
     private static ObjectResult AiUnavailable() => new ObjectResult(new ProblemDetails { Status = StatusCodes.Status503ServiceUnavailable, Title = "Layanan AI pengenalan wajah tidak tersedia.", Detail = "Tidak ada presensi atau perubahan profil yang dicatat. Coba kembali nanti." }) { StatusCode = StatusCodes.Status503ServiceUnavailable };
+    private static ObjectResult CaptureStorageUnavailable() => new(new ProblemDetails { Status = StatusCodes.Status503ServiceUnavailable, Title = "Penyimpanan capture wajah tidak tersedia." }) { StatusCode = StatusCodes.Status503ServiceUnavailable };
     private static BadRequestObjectResult BadRequestProblem(string detail) => new(new ProblemDetails { Status = StatusCodes.Status400BadRequest, Title = "Permintaan face enrollment tidak valid.", Detail = detail });
     private static ObjectResult ConflictProblem(string detail) => new(new ProblemDetails { Status = StatusCodes.Status409Conflict, Title = "Status face enrollment tidak memungkinkan.", Detail = detail }) { StatusCode = StatusCodes.Status409Conflict };
 }

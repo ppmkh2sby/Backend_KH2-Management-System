@@ -3,6 +3,7 @@ using System.Security.Claims;
 using KH2.ManagementSystem.Api.Contracts.Kafarah;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Domain.Kafarahs;
+using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -462,8 +463,7 @@ public sealed class KafarahController(
             return false;
         }
 
-        return string.Equals(tim, "KTB", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(tim, "ketertiban", StringComparison.OrdinalIgnoreCase);
+        return SantriTeam.IsKetertiban(tim);
     }
 
     private static KafarahResponse MapResponse(KafarahReadRow row)

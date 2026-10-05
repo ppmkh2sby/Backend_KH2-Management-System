@@ -487,3 +487,24 @@ $RECYCLE.BIN/
 
 # Local .NET CLI home used in sandboxed environments
 .dotnet/
+
+# Local code-analysis and AI-generated documentation artifacts
+/graphify-out/
+/docs/supabase-database.md
+/AGENTS.md
+/.codex/
+/.codex-publish/
+/docs/FACE_RECOGNITION_ARCHITECTURE.md
+/docs/FACE_RECOGNITION_PLAN.md
+/docs/face-recognition-foundation.md
+/docs/face-recognition-service-contract.md
+/docs/face_recognition_contex.md
+
+# Local production configuration. Commit the production example only.
+/src/KH2.ManagementSystem.Api/appsettings.Production.json
+
+# Face-service local environments, caches and model artifacts
+/services/face-service/.venv/
+/services/face-service/.pytest_cache/
+/services/face-service/**/__pycache__/
+/services/face-service/models/

@@ -1,3 +1,4 @@
+
 namespace KH2.ManagementSystem.Domain.FaceRecognition;
 
 public enum RecognitionOutcome

@@ -6,4 +6,7 @@
     <Project Path="src/KH2.ManagementSystem.Infrastructure/KH2.ManagementSystem.Infrastructure.csproj" />
     <Project Path="src/KH2.ManagementSystem.Shared/KH2.ManagementSystem.Shared.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/KH2.ManagementSystem.UnitTests/KH2.ManagementSystem.UnitTests.csproj" />
+  </Folder>
 </Solution>

@@ -1,9 +1,12 @@
 using KH2.ManagementSystem.Domain.Auth;
+using KH2.ManagementSystem.Domain.FaceRecognition;
 using KH2.ManagementSystem.Domain.Kafarahs;
 using KH2.ManagementSystem.Domain.Kegiatans;
+using KH2.ManagementSystem.Domain.JurnalKeilmuans;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
 using KH2.ManagementSystem.Domain.Presensis;
 using KH2.ManagementSystem.Domain.ProgressKeilmuans;
+using KH2.ManagementSystem.Domain.Quran;
 using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Sesis;
 using KH2.ManagementSystem.Domain.Users;
@@ -22,17 +25,30 @@ public sealed class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Santri> Santris => Set<Santri>();
     public DbSet<Kegiatan> Kegiatans => Set<Kegiatan>();
+    public DbSet<JurnalKeilmuan> JurnalKeilmuans => Set<JurnalKeilmuan>();
     public DbSet<Sesi> Sesis => Set<Sesi>();
     public DbSet<Presensi> Presensis => Set<Presensi>();
     public DbSet<Kafarah> Kafarahs => Set<Kafarah>();
     public DbSet<ProgressKeilmuan> ProgressKeilmuans => Set<ProgressKeilmuan>();
+    public DbSet<QuranSurah> QuranSurahs => Set<QuranSurah>();
     public DbSet<LogKeluarMasuk> LogKeluarMasuks => Set<LogKeluarMasuk>();
     public DbSet<WaliSantriRelation> WaliSantriRelations => Set<WaliSantriRelation>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
+    public DbSet<FaceEnrollment> FaceEnrollments => Set<FaceEnrollment>();
+    public DbSet<LegacyFaceEnrollment> LegacyFaceEnrollments => Set<LegacyFaceEnrollment>();
+    public DbSet<LegacyFaceEnrollmentCapture> LegacyFaceEnrollmentCaptures => Set<LegacyFaceEnrollmentCapture>();
+    public DbSet<FaceProfile> FaceProfiles => Set<FaceProfile>();
+    public DbSet<FaceEmbedding> FaceEmbeddings => Set<FaceEmbedding>();
+    public DbSet<ProviderFaceProfile> ProviderFaceProfiles => Set<ProviderFaceProfile>();
+    public DbSet<FaceAttendanceSession> FaceAttendanceSessions => Set<FaceAttendanceSession>();
+    public DbSet<LegacyFaceRecognitionEvent> LegacyFaceRecognitionEvents => Set<LegacyFaceRecognitionEvent>();
+    public DbSet<AttendanceDevice> AttendanceDevices => Set<AttendanceDevice>();
+    public DbSet<FaceRecognitionEvent> FaceRecognitionEvents => Set<FaceRecognitionEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("vector");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

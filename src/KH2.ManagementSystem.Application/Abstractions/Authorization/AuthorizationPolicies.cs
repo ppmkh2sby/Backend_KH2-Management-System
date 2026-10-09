@@ -7,4 +7,5 @@ public static class AuthorizationPolicies
     public const string CanApprove = nameof(CanApprove);
     public const string CanReadAllSantri = nameof(CanReadAllSantri);
     public const string CanAccessSantri = nameof(CanAccessSantri);
+    public const string CanOperateFaceAttendance = nameof(CanOperateFaceAttendance);
 }

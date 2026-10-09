@@ -5,6 +5,7 @@ using KH2.ManagementSystem.Domain.Kegiatans;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
 using KH2.ManagementSystem.Domain.Presensis;
 using KH2.ManagementSystem.Domain.ProgressKeilmuans;
+using KH2.ManagementSystem.Domain.Quran;
 using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Sesis;
 using KH2.ManagementSystem.Domain.Users;
@@ -42,11 +43,52 @@ public sealed class MasterAccountSeeder(
         await SeedStaffAsync(Admins(), knownUsernames, cancellationToken);
         await SeedStaffAsync(DewanGuru(), knownUsernames, cancellationToken);
         await SeedStaffAsync(Pengurus(), knownUsernames, cancellationToken);
-        await SeedStaffAsync(WaliSantris(), knownUsernames, cancellationToken);
+        await SeedQuranSurahsAsync(cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await SeedRelatedDataAsync(includeSampleData, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await ValidateWaliRelationsAsync(cancellationToken);
+    }
+
+    private async Task SeedQuranSurahsAsync(CancellationToken cancellationToken)
+    {
+        if (QuranSurahCatalog.All.Count != 114 ||
+            QuranSurahCatalog.All.Sum(x => x.VerseCount) != 6236 ||
+            QuranSurahCatalog.All.Select(x => x.Number).Distinct().Count() != 114)
+        {
+            throw new InvalidOperationException("The Quran surah catalog must contain the 114 surahs and 6,236 verses.");
+        }
+
+        var existingByNumber = await dbContext.QuranSurahs
+            .ToDictionaryAsync(x => x.Number, cancellationToken);
+
+        foreach (var item in QuranSurahCatalog.All)
+        {
+            if (!existingByNumber.TryGetValue(item.Number, out var existing))
+            {
+                await dbContext.QuranSurahs.AddAsync(
+                    new QuranSurah(
+                        Guid.NewGuid(),
+                        item.Number,
+                        item.Name,
+                        item.ArabicName,
+                        item.VerseCount),
+                    cancellationToken);
+                continue;
+            }
+
+            if (existing.Name != item.Name ||
+                existing.ArabicName != item.ArabicName ||
+                existing.VerseCount != item.VerseCount)
+            {
+                existing.UpdateMetadata(
+                    item.Name,
+                    item.ArabicName,
+                    item.VerseCount,
+                    DateTimeOffset.UtcNow);
+            }
+        }
     }
 
     private async Task SeedSantrisAsync(
@@ -175,50 +217,125 @@ public sealed class MasterAccountSeeder(
         Dictionary<string, Santri> santriByNis,
         CancellationToken cancellationToken)
     {
-        var relationSpecs = new[]
+        foreach (var santri in santriByNis.Values)
         {
-            new { Username = "wali", SantriNis = new[] { "022424008", "022424001" } },
-            new { Username = "wali-putri", SantriNis = new[] { "022424016", "022525003" } }
-        };
+            var waliSantriCode = BuildWaliSantriCode(santri.Nis);
+            var waliUser = await FindOrCreateWaliUserAsync(
+                waliSantriCode,
+                santri.FullName,
+                cancellationToken);
 
-        foreach (var spec in relationSpecs)
-        {
-            var waliUser = await dbContext.Users
-                .FirstOrDefaultAsync(
-                    x => x.Username == spec.Username && x.Role == UserRole.WaliSantri,
-                    cancellationToken);
+            var existing = await dbContext.WaliSantriRelations
+                .FirstOrDefaultAsync(x => x.SantriId == santri.Id, cancellationToken);
 
-            if (waliUser is null)
+            if (existing is null)
             {
-                continue;
-            }
-
-            foreach (var nis in spec.SantriNis)
-            {
-                if (!santriByNis.TryGetValue(nis, out var santri))
-                {
-                    continue;
-                }
-
-                var existing = await dbContext.WaliSantriRelations
-                    .FirstOrDefaultAsync(
-                        x => x.WaliUserId == waliUser.Id && x.SantriId == santri.Id,
-                        cancellationToken);
-
-                if (existing is not null)
-                {
-                    existing.ChangeRelationshipLabel("Orang Tua");
-                    continue;
-                }
-
                 await dbContext.WaliSantriRelations.AddAsync(
                     new WaliSantriRelation(
                         Guid.NewGuid(),
                         waliUser.Id,
                         santri.Id,
-                        "Orang Tua"),
+                        "Orang Tua",
+                        waliSantriCode),
                     cancellationToken);
+                continue;
             }
+
+            existing.AssignTo(waliUser.Id);
+            existing.ChangeRelationshipLabel("Orang Tua");
+            existing.ChangeWaliSantriCode(waliSantriCode);
+        }
+    }
+
+    private async Task<User> FindOrCreateWaliUserAsync(
+        string waliSantriCode,
+        string santriName,
+        CancellationToken cancellationToken)
+    {
+        var existingUser = dbContext.Users.Local
+            .FirstOrDefault(x => x.Username == waliSantriCode)
+            ?? await dbContext.Users
+                .FirstOrDefaultAsync(x => x.Username == waliSantriCode, cancellationToken);
+
+        if (existingUser is not null)
+        {
+            if (existingUser.Role != UserRole.WaliSantri)
+            {
+                throw new InvalidOperationException(
+                    $"Username '{waliSantriCode}' is already used by a non-wali account.");
+            }
+
+            existingUser.Rename($"Wali Santri - {santriName}");
+            existingUser.Activate();
+            existingUser.CompletePasswordChange();
+            EnsureSeedPassword(existingUser);
+            return existingUser;
+        }
+
+        var waliUser = CreateUser(
+            username: waliSantriCode,
+            fullName: $"Wali Santri - {santriName}",
+            role: UserRole.WaliSantri);
+
+        waliUser.CompletePasswordChange();
+        await dbContext.Users.AddAsync(waliUser, cancellationToken);
+        return waliUser;
+    }
+
+    private static string BuildWaliSantriCode(string santriNis)
+    {
+        var normalizedNis = santriNis.Trim();
+
+        if (normalizedNis.Length < 3 || normalizedNis.Any(character => !char.IsDigit(character)))
+        {
+            throw new InvalidOperationException(
+                $"Santri NIS '{santriNis}' must contain at least three digits to build a wali santri code.");
+        }
+
+        return $"354{normalizedNis[2..]}";
+    }
+
+    private async Task ValidateWaliRelationsAsync(CancellationToken cancellationToken)
+    {
+        var mappings = await (
+                from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                join user in dbContext.Users.AsNoTracking() on relation.WaliUserId equals user.Id
+                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                select new
+                {
+                    relation.WaliUserId,
+                    relation.SantriId,
+                    relation.WaliSantriCode,
+                    user.Username,
+                    santri.Nis
+                })
+            .ToListAsync(cancellationToken);
+
+        var hasMissingWali = await dbContext.Santris
+            .AsNoTracking()
+            .AnyAsync(
+                santri => !dbContext.WaliSantriRelations.Any(relation => relation.SantriId == santri.Id),
+                cancellationToken);
+
+        var hasInvalidMapping = mappings.Any(mapping =>
+            !string.Equals(mapping.Username, mapping.WaliSantriCode, StringComparison.Ordinal) ||
+            !string.Equals(
+                mapping.WaliSantriCode,
+                BuildWaliSantriCode(mapping.Nis),
+                StringComparison.Ordinal));
+
+        var hasDuplicateWali = mappings
+            .GroupBy(mapping => mapping.WaliUserId)
+            .Any(group => group.Count() > 1);
+
+        var hasDuplicateSantri = mappings
+            .GroupBy(mapping => mapping.SantriId)
+            .Any(group => group.Count() > 1);
+
+        if (hasMissingWali || hasInvalidMapping || hasDuplicateWali || hasDuplicateSantri)
+        {
+            throw new InvalidOperationException(
+                "Every santri must have exactly one wali account whose username and relation code match the santri NIS.");
         }
     }
 
@@ -610,13 +727,6 @@ public sealed class MasterAccountSeeder(
             new StaffSeedItem("0218354003", "Angga", UserRole.Pengurus),
             new StaffSeedItem("0218354004", "Avan", UserRole.Pengurus),
             new StaffSeedItem("0218354005", "Abdurrahman", UserRole.Pengurus)
-        };
-
-    private static StaffSeedItem[] WaliSantris() =>
-        new[]
-        {
-            new StaffSeedItem("wali", "Wali Santri KH2", UserRole.WaliSantri),
-            new StaffSeedItem("wali-putri", "Wali Santri Putri KH2", UserRole.WaliSantri)
         };
 
     private static string ResolvePresensiStatus(int santriIndex, int sessionIndex)

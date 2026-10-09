@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using KH2.ManagementSystem.Api.Options;
 using KH2.ManagementSystem.Application.Abstractions.Messaging;
 using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriAttendance;
@@ -13,16 +15,53 @@ using KH2.ManagementSystem.Infrastructure.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
+using KH2.ManagementSystem.Infrastructure.Health;
+using KH2.ManagementSystem.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedOrigins = GetAllowedOrigins(builder.Configuration);
+var legacyFaceApiEnabled = builder.Configuration.GetValue<bool?>("LegacyFaceApi:Enabled") ?? true;
 
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
+    .AddCheck<FaceServiceHealthCheck>("face-service", tags: ["ready"]);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("FaceRecognition", context =>
+    {
+        var partitionKey = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+    options.AddPolicy("FaceAttendanceDevice", context =>
+    {
+        var deviceId = context.Request.Headers["X-Attendance-Device-Id"].FirstOrDefault();
+        var partitionKey = Guid.TryParse(deviceId, out var parsedDeviceId)
+            ? parsedDeviceId.ToString("N")
+            : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter($"face-attendance:{partitionKey}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
 ConfigureForwardedHeaders(builder.Services, builder.Configuration);
 builder.Services.AddCors(options =>
 {
@@ -60,6 +99,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.Configure<ApplicationMetadataOptions>(
     builder.Configuration.GetSection(ApplicationMetadataOptions.SectionName));
+builder.Services.Configure<LegacyFaceApiOptions>(
+    builder.Configuration.GetSection(LegacyFaceApiOptions.SectionName));
 
 builder.Services.AddScoped<IQueryHandler<GetSystemOverviewQuery, Result<SystemOverviewDto>>, GetSystemOverviewQueryHandler>();
 builder.Services.AddScoped<IQueryHandler<GetMySantriDashboardQuery, Result<SantriDashboardDto>>, GetMySantriDashboardQueryHandler>();
@@ -67,7 +108,7 @@ builder.Services.AddScoped<IQueryHandler<GetMySantriAttendanceQuery, Result<Sant
 builder.Services.AddScoped<IQueryHandler<GetMySantriProgressQuery, Result<SantriDashboardProgressPageDto>>, GetMySantriProgressQueryHandler>();
 builder.Services.AddScoped<IQueryHandler<GetMySantriLogQuery, Result<SantriDashboardLogPageDto>>, GetMySantriLogQueryHandler>();
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, legacyFaceApiEnabled);
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(AuthorizationPolicies.AdminOnly, policy =>
@@ -93,19 +134,46 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy(AuthorizationPolicies.CanAccessSantri, policy =>
         policy.Requirements.Add(new CanAccessSantriRequirement()));
+
+    options.AddPolicy(AuthorizationPolicies.CanOperateFaceAttendance, policy =>
+        policy.RequireAuthenticatedUser()
+            .Requirements.Add(new CanOperateFaceAttendanceRequirement()));
 });
 
 var app = builder.Build();
 
 await InitializeDatabaseAsync(app);
 
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
-app.UseHttpsRedirection();
+var enableHttpsRedirection = app.Configuration.GetValue<bool?>("Https:Enabled")
+    ?? !app.Environment.IsDevelopment();
+
+if (enableHttpsRedirection)
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors("Frontend");
 
+app.UseRouting();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
+app.UseMiddleware<LegacyFaceApiMiddleware>();
+
+app.MapGet("/api/v1/public/santri-total", async (
+    AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var totalCount = await dbContext.Users
+        .AsNoTracking()
+        .CountAsync(user => user.Role == UserRole.Santri, cancellationToken);
+
+    return Results.Ok(new { totalCount });
+})
+    .AllowAnonymous();
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -116,6 +184,14 @@ app.MapGet("/", () => Results.Ok(new
 
 app.MapGet("/scalar", () => Results.Redirect("/"));
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+});
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 app.MapControllers();
 
 app.Run();
@@ -259,6 +335,7 @@ public partial class Program
         "/api/v1/progress-keilmuan/sync",
         "/api/v1/log-keluar-masuk",
         "/api/v1/santri",
+        "/api/v1/public/santri-total",
         "/api/v1/dashboard/santri/me",
         "/api/v1/dashboard/santri/me/presensi",
         "/api/v1/dashboard/santri/me/progres-keilmuan",
@@ -269,5 +346,8 @@ public partial class Program
         "/api/v1/auth/set-email",
         "/api/v1/auth/verify-email",
         "/api/v1/auth/logout"
+        ,"/api/v1/face-enrollment/me"
+        ,"/api/v1/face-attendance/sessions"
+        ,"/api/attendance/face-recognition"
     ];
 }

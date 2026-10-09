@@ -6,6 +6,7 @@ using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriLog;
 using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriProgress;
 using KH2.ManagementSystem.Domain.Kafarahs;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
+using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -222,6 +223,7 @@ public sealed class SantriDashboardReader(
             .Select(x => new
             {
                 x.Id,
+                x.Username,
                 x.FullName,
                 x.Role,
                 x.EmailConfirmed
@@ -253,6 +255,36 @@ public sealed class SantriDashboardReader(
                 ownSantri.Id,
                 ownSantri.Tim,
                 BuildProfile(user.FullName, user.Role, user.EmailConfirmed, ownSantri, "self"));
+        }
+
+        if (user.Role == UserRole.WaliSantri)
+        {
+            var linkedSantri = await (
+                from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                where relation.WaliUserId == userId &&
+                      relation.WaliSantriCode == user.Username
+                orderby santri.Nis
+                select new SantriProjection(
+                    santri.Id,
+                    santri.FullName,
+                    santri.Nis,
+                    santri.Kampus,
+                    santri.Jurusan,
+                    santri.Gender,
+                    santri.Tim,
+                    santri.Kelas))
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (linkedSantri is null)
+            {
+                return null;
+            }
+
+            return new DashboardContext(
+                linkedSantri.Id,
+                linkedSantri.Tim,
+                BuildProfile(user.FullName, user.Role, user.EmailConfirmed, linkedSantri, "wali-relation"));
         }
 
         var fallbackSantri = await dbContext.Santris
@@ -478,7 +510,7 @@ public sealed class SantriDashboardReader(
 
     private static bool IsAttendanceManager(DashboardContext context)
     {
-        return string.Equals(context.Tim, "ketertiban", StringComparison.OrdinalIgnoreCase);
+        return SantriTeam.IsKetertiban(context.Tim);
     }
 
     private static bool IsAttendanceIssue(string status)

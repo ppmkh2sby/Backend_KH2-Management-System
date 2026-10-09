@@ -5,6 +5,7 @@ using KH2.ManagementSystem.Api.Contracts.Presensi;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Domain.Kegiatans;
 using KH2.ManagementSystem.Domain.Presensis;
+using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Sesis;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
@@ -868,8 +869,7 @@ public sealed class PresensiController(
             return false;
         }
 
-        return string.Equals(tim, "KTB", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(tim, "ketertiban", StringComparison.OrdinalIgnoreCase);
+        return SantriTeam.IsKetertiban(tim);
     }
 
     private static string Slugify(string input, int maxLength)

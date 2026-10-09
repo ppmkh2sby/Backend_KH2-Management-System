@@ -12,12 +12,15 @@ using KH2.ManagementSystem.Infrastructure.Dashboard;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using KH2.ManagementSystem.Application.Abstractions.Security;
 using KH2.ManagementSystem.Infrastructure.Security;
+using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
+using KH2.ManagementSystem.Infrastructure.FaceRecognition;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Pgvector.EntityFrameworkCore;
 
 namespace KH2.ManagementSystem.Infrastructure;
 
@@ -25,9 +28,15 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        bool legacyFaceApiEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        services.AddFaceRecognitionServiceContracts(configuration);
+        if (legacyFaceApiEnabled)
+        {
+            services.AddLegacyFaceProviderContracts(configuration);
+        }
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -88,15 +97,17 @@ public static class DependencyInjection
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
+        connectionString = PostgreSqlConnectionString.Normalize(connectionString);
 
         services.AddDbContext<AppDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(connectionString, npgsqlOptions => npgsqlOptions.UseVector());
         });
 
         services.AddScoped<ISantriAccessReader, AppDbSantriAccessReader>();
         services.AddScoped<ISantriDashboardReader, SantriDashboardReader>();
         services.AddScoped<IAuthorizationHandler, CanAccessSantriHandler>();
+        services.AddScoped<IAuthorizationHandler, CanOperateFaceAttendanceHandler>();
         services.AddScoped<IUserAuthenticator, CompositeUserAuthenticator>();
 
         services.AddScoped<IAccessTokenProvider, JwtTokenProvider>();
@@ -104,7 +115,6 @@ public static class DependencyInjection
         services.AddScoped<IEmailVerificationCodeService, EmailVerificationCodeService>();
         services.AddScoped<MasterAccountSeeder>();
         services.AddSingleton<IClock, SystemClock>();
-
         return services;
     }
 }

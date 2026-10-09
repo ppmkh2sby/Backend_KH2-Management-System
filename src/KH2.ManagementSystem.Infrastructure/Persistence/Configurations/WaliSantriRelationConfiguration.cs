@@ -25,12 +25,19 @@ public sealed class WaliSantriRelationConfiguration : IEntityTypeConfiguration<W
             .HasMaxLength(100)
             .IsRequired();
 
+        builder.Property(x => x.WaliSantriCode)
+            .HasMaxLength(20)
+            .IsRequired();
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 
         builder.Property(x => x.UpdatedAtUtc);
 
         builder.HasIndex(x => new { x.WaliUserId, x.SantriId })
+            .IsUnique();
+
+        builder.HasIndex(x => x.WaliSantriCode)
             .IsUnique();
 
         builder.HasOne<Domain.Users.User>()

@@ -15,7 +15,7 @@ public sealed class FaceEnrollmentConfiguration : IEntityTypeConfiguration<FaceE
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(x => x.ModelName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.ModelVersion).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.AcceptedSampleCount).IsRequired();
+        builder.Property(x => x.ReferenceImagePath).HasMaxLength(500);
         builder.Property(x => x.EnrolledAtUtc).IsRequired();
         builder.HasIndex(x => x.FaceProfileId);
         builder.HasIndex(x => new { x.FaceProfileId, x.Status }).IsUnique()

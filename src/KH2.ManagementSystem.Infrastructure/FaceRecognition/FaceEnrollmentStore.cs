@@ -17,16 +17,27 @@ public sealed class FaceEnrollmentStore(AppDbContext context) : IFaceEnrollmentS
     public async Task<bool> SaveAsync(FaceProfile profile, bool isNewProfile, FaceEnrollment enrollment, IReadOnlyList<FaceEmbedding> embeddings, DateTimeOffset now, CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        if (isNewProfile) context.FaceProfiles.Add(profile);
-        var old = profile.CurrentEnrollmentId is Guid oldId
-            ? await context.FaceEnrollments.SingleOrDefaultAsync(item => item.Id == oldId, cancellationToken) : null;
-        context.FaceEnrollments.Add(enrollment);
-        context.FaceEmbeddings.AddRange(embeddings);
         try
         {
-            enrollment.Activate(now);
-            profile.Activate(enrollment.Id, now);
+            if (profile.Status is FaceProfileStatus.Disabled)
+            {
+                throw new InvalidOperationException("A disabled face profile cannot be enrolled.");
+            }
+
+            if (isNewProfile) context.FaceProfiles.Add(profile);
+            var old = await context.FaceEnrollments.SingleOrDefaultAsync(
+                item => item.FaceProfileId == profile.Id && item.Status == FaceEnrollmentStatus.Active,
+                cancellationToken);
+
+            context.FaceEnrollments.Add(enrollment);
+            context.FaceEmbeddings.AddRange(embeddings);
+            await context.SaveChangesAsync(cancellationToken);
+
             old?.Supersede(now);
+            await context.SaveChangesAsync(cancellationToken);
+
+            enrollment.Activate(now);
+            profile.ActivateProfile(now);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return true;
@@ -39,6 +50,12 @@ public sealed class FaceEnrollmentStore(AppDbContext context) : IFaceEnrollmentS
             context.Entry(enrollment).State = EntityState.Detached;
             foreach (var embedding in embeddings) context.Entry(embedding).State = EntityState.Detached;
             return false;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            throw;
         }
     }
 }

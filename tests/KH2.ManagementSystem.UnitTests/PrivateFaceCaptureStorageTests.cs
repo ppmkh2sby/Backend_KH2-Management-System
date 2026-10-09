@@ -12,7 +12,7 @@ public sealed class PrivateFaceCaptureStorageTests
         var root = Path.Combine(Path.GetTempPath(), $"kh2-face-test-{Guid.NewGuid():N}");
         try
         {
-            var storage = new LocalPrivateFaceCaptureStorage(Options.Create(new FaceRecognitionOptions { CaptureStoragePath = root }));
+            var storage = new LocalPrivateFaceCaptureStorage(Options.Create(new LegacyFaceProviderOptions { CaptureStoragePath = root }));
             await using var content = new MemoryStream([1, 2, 3]);
 
             var stored = await storage.SaveAsync(Guid.NewGuid(), 1, "untrusted-name.exe", "image/png", content, CancellationToken.None);
@@ -34,7 +34,7 @@ public sealed class PrivateFaceCaptureStorageTests
         var root = Path.Combine(Path.GetTempPath(), $"kh2-face-test-{Guid.NewGuid():N}");
         try
         {
-            var storage = new LocalPrivateFaceCaptureStorage(Options.Create(new FaceRecognitionOptions { CaptureStoragePath = root }));
+            var storage = new LocalPrivateFaceCaptureStorage(Options.Create(new LegacyFaceProviderOptions { CaptureStoragePath = root }));
             await using var content = new MemoryStream([1]);
 
             await Assert.ThrowsAsync<ArgumentException>(() => storage.SaveAsync(Guid.NewGuid(), 1, "capture.gif", "image/gif", content, CancellationToken.None));

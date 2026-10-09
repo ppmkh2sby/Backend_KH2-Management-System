@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using KH2.ManagementSystem.Api.Infrastructure;
 using KH2.ManagementSystem.Api.Contracts.FaceRecognition;
 using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
@@ -21,12 +22,13 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [ApiController]
 [Authorize]
 [EnableRateLimiting("FaceRecognition")]
+[ServiceFilter(typeof(LegacyFaceApiGateFilter))]
 [Route("api/v1/face-attendance/sessions")]
 public sealed class FaceAttendanceController(
     AppDbContext dbContext,
     IFaceRecognitionClient faceRecognitionClient,
     IClock clock,
-    IOptions<FaceRecognitionOptions> faceOptions) : ControllerBase
+    IOptions<LegacyFaceProviderOptions> faceOptions) : ControllerBase
 {
     private const long MaximumPhotoBytes = 5 * 1024 * 1024;
 

@@ -14,8 +14,8 @@ public sealed class FaceEmbeddingConfiguration : IEntityTypeConfiguration<FaceEm
         builder.ToTable("FaceEmbeddings", tableBuilder =>
         {
             tableBuilder.HasCheckConstraint(
-                "CK_FaceEmbeddings_CaptureIndex_Positive",
-                "\"CaptureIndex\" > 0");
+                "CK_FaceEmbeddings_CaptureIndex_Range",
+                "\"CaptureIndex\" >= 1 AND \"CaptureIndex\" <= 5");
             tableBuilder.HasCheckConstraint(
                 "CK_FaceEmbeddings_QualityScore_Range",
                 "\"QualityScore\" IS NULL OR (\"QualityScore\" >= 0 AND \"QualityScore\" <= 1)");
@@ -39,9 +39,8 @@ public sealed class FaceEmbeddingConfiguration : IEntityTypeConfiguration<FaceEm
             .IsRequired();
         builder.Property(x => x.QualityScore).HasColumnType("real");
         builder.Property(x => x.CaptureIndex).IsRequired();
-        builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.CreatedAtUtc).IsRequired();
-        builder.HasIndex(x => x.FaceEnrollmentId);
+        builder.HasIndex(x => new { x.FaceEnrollmentId, x.CaptureIndex }).IsUnique();
         builder.HasOne<FaceEnrollment>().WithMany().HasForeignKey(x => x.FaceEnrollmentId).OnDelete(DeleteBehavior.Cascade);
     }
 }

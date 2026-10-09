@@ -17,7 +17,7 @@ public sealed class FaceRecognitionDomainTests
 
         Assert.Equal(FaceProfileStatus.Pending, profile.Status);
 
-        profile.Activate(now.AddMinutes(1));
+        profile.ActivateProfile(now.AddMinutes(1));
         profile.MarkVerified(now.AddMinutes(2));
 
         Assert.Equal(FaceProfileStatus.Active, profile.Status);
@@ -61,10 +61,20 @@ public sealed class FaceRecognitionDomainTests
         var now = DateTimeOffset.UtcNow;
         var profile = new FaceProfile(Guid.NewGuid(), Guid.NewGuid(), "arcface", "1", now);
         Assert.Throws<InvalidOperationException>(() => profile.MarkVerified(now));
-        profile.Activate(now);
+        profile.ActivateProfile(now);
         profile.RequireReEnrollment(now);
         Assert.Equal(FaceProfileStatus.NeedsReEnrollment, profile.Status);
         Assert.Throws<InvalidOperationException>(() => profile.MarkVerified(now));
+    }
+
+    [Fact]
+    public void DisabledProfileCannotBeActivatedByEnrollment()
+    {
+        var profile = new FaceProfile(Guid.NewGuid(), Guid.NewGuid(), "arcface", "1", DateTimeOffset.UtcNow);
+        profile.Disable(DateTimeOffset.UtcNow);
+
+        Assert.Throws<InvalidOperationException>(() => profile.ActivateProfile(DateTimeOffset.UtcNow));
+        Assert.Equal(FaceProfileStatus.Disabled, profile.Status);
     }
 
     [Fact]
@@ -91,21 +101,65 @@ public sealed class FaceRecognitionDomainTests
         Assert.True(foreignKey.IsRequired);
         Assert.Equal(DeleteBehavior.Cascade, foreignKey.DeleteBehavior);
         Assert.Contains(entityType.GetIndexes(), index =>
-            index.Properties.Single().Name == nameof(FaceEmbedding.FaceEnrollmentId));
+            index.IsUnique && index.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(FaceEmbedding.FaceEnrollmentId), nameof(FaceEmbedding.CaptureIndex)]));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    public void FaceEmbeddingAcceptsCaptureIndexWithinCanonicalRange(int captureIndex) =>
+        _ = new FaceEmbedding(Guid.NewGuid(), Guid.NewGuid(), new float[FaceEmbedding.RequiredDimensions], captureIndex);
+
+    [Theory]
+    [InlineData(6)]
+    public void FaceEmbeddingRejectsCaptureIndexOutsideCanonicalRange(int captureIndex) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new FaceEmbedding(Guid.NewGuid(), Guid.NewGuid(), new float[FaceEmbedding.RequiredDimensions], captureIndex));
+
+    [Theory]
+    [InlineData(-0.1f)]
+    [InlineData(1.1f)]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    public void FaceEmbeddingRejectsInvalidQualityScore(float score) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new FaceEmbedding(Guid.NewGuid(), Guid.NewGuid(), new float[FaceEmbedding.RequiredDimensions], 1, score));
+
     [Fact]
-    public void EnrollmentRegisterRequiresItsCompleteTransition()
+    public void EnrollmentActivationUsesOnlyItsLifecycleState()
     {
         var enrollment = new FaceEnrollment(Guid.NewGuid(), Guid.NewGuid());
         var now = DateTimeOffset.UtcNow;
 
-        enrollment.SetCaptureCount(5, now);
-        enrollment.Register(now);
+        enrollment.Activate(now);
 
-        Assert.Equal(FaceEnrollmentStatus.Registered, enrollment.Status);
-        Assert.Equal(5, enrollment.CaptureCount);
-        Assert.Equal(now, enrollment.EmbeddingUpdatedAtUtc);
+        Assert.Equal(FaceEnrollmentStatus.Active, enrollment.Status);
+        Assert.Equal(now, enrollment.ActivatedAtUtc);
+    }
+
+    [Fact]
+    public void AttendanceDeviceMapsCanonicalKeyRotationState()
+    {
+        using var context = CreateContext();
+        var entityType = context.Model.FindEntityType(typeof(AttendanceDevice))!;
+
+        Assert.False(entityType.FindProperty(nameof(AttendanceDevice.KeyVersion))!.IsNullable);
+        Assert.True(entityType.FindProperty(nameof(AttendanceDevice.KeyRotatedAtUtc))!.IsNullable);
+    }
+
+    [Fact]
+    public void FaceRecognitionEventMapsCanonicalOutcomeStateAsRequiredStrings()
+    {
+        using var context = CreateContext();
+        var entityType = context.Model.FindEntityType(typeof(FaceRecognitionEvent))!;
+
+        Assert.False(entityType.FindProperty(nameof(FaceRecognitionEvent.Source))!.IsNullable);
+        Assert.False(entityType.FindProperty(nameof(FaceRecognitionEvent.RecognitionOutcome))!.IsNullable);
+        Assert.False(entityType.FindProperty(nameof(FaceRecognitionEvent.AttendanceOutcome))!.IsNullable);
+        Assert.Equal(typeof(string), entityType.FindProperty(nameof(FaceRecognitionEvent.Source))!.GetTypeMapping().Converter!.ProviderClrType);
+        Assert.Equal(typeof(string), entityType.FindProperty(nameof(FaceRecognitionEvent.RecognitionOutcome))!.GetTypeMapping().Converter!.ProviderClrType);
+        Assert.Equal(typeof(string), entityType.FindProperty(nameof(FaceRecognitionEvent.AttendanceOutcome))!.GetTypeMapping().Converter!.ProviderClrType);
     }
 
     [Fact]

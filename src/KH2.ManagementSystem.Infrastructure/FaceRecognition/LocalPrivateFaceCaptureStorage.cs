@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace KH2.ManagementSystem.Infrastructure.FaceRecognition;
 
-public sealed class LocalPrivateFaceCaptureStorage(IOptions<FaceRecognitionOptions> options) : IFaceCaptureStorage
+public sealed class LocalPrivateFaceCaptureStorage(IOptions<LegacyFaceProviderOptions> options) : IFaceCaptureStorage
 {
     private readonly string rootPath = Path.GetFullPath(options.Value.CaptureStoragePath);
 

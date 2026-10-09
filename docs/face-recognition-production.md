@@ -28,15 +28,26 @@
 Use environment variables or a protected production configuration provider.
 Never commit values for `ConnectionStrings__DefaultConnection`,
 `Jwt__SecretKey`, `FaceRecognition__ApiKey`, or
-`FaceRecognition__ServiceApiKey`.
+`LegacyFaceProvider__ApiKey`.
 
 `FaceRecognition__SimilarityThreshold` must remain unset until Phase 8
 calibration supplies a measured value. Existing legacy
-`FaceRecognition__ConfidenceThreshold` is independent and must not be reused
+`LegacyFaceProvider__ConfidenceThreshold` is independent and must not be reused
 as the pgvector similarity threshold.
 
-Set `FaceRecognition__CaptureStoragePath` outside the public web root. The
+Set `LegacyFaceProvider__CaptureStoragePath` outside the public web root. The
 process identity must have access to that private location only.
+
+The canonical service uses `FaceRecognition__BaseUrl`,
+`FaceRecognition__ApiKey`, `FaceRecognition__TimeoutSeconds`,
+`FaceRecognition__SimilarityThreshold`,
+`FaceRecognition__ExpectedEmbeddingDimension`, and
+`FaceRecognition__RequiredEnrollmentSamples`. The frozen transitional provider
+uses `LegacyFaceProvider__BaseUrl`, `LegacyFaceProvider__ApiKey`,
+`LegacyFaceProvider__TimeoutSeconds`, `LegacyFaceProvider__ConfidenceThreshold`,
+and `LegacyFaceProvider__CaptureStoragePath`. Move the legacy fields from the
+old `FaceRecognition` section before deploying this version; the application
+does not read the old aliases.
 
 ## Load-test procedure
 

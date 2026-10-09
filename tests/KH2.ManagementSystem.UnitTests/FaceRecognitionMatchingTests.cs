@@ -139,7 +139,7 @@ public sealed class FaceRecognitionMatchingTests
     }
 
     [Fact]
-    public void PostgreSqlSearchAggregatesPerSantriAndUsesParameterizedActiveModelFilters()
+    public void PostgreSqlSearchReturnsTopTwoDistinctEligibleIdentities()
     {
         using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql("Host=localhost;Database=model_tests;Username=postgres;Password=postgres", options => options.UseVector()).Options);
@@ -151,9 +151,12 @@ public sealed class FaceRecognitionMatchingTests
         Assert.Contains("GROUP BY eligible.\"SantriId\"", sql, StringComparison.Ordinal);
         Assert.Contains("MAX(1.0 - eligible.\"Distance\")", sql, StringComparison.Ordinal);
         Assert.Contains("LIMIT 2", sql, StringComparison.Ordinal);
-        Assert.Contains("embedding.\"IsActive\" = TRUE", sql, StringComparison.Ordinal);
+        Assert.True(sql.IndexOf("MAX(1.0 - eligible.\"Distance\")", StringComparison.Ordinal) <
+            sql.IndexOf("LIMIT 2", StringComparison.Ordinal));
+        Assert.DoesNotContain("embedding.\"IsActive\"", sql, StringComparison.Ordinal);
         Assert.Contains("profile.\"Status\" = @activeStatus", sql, StringComparison.Ordinal);
-        Assert.Contains("profile.\"CurrentEnrollmentId\" = enrollment.\"Id\"", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CurrentEnrollmentId", sql, StringComparison.Ordinal);
+        Assert.Contains("enrollment.\"Status\" = @activeEnrollmentStatus", sql, StringComparison.Ordinal);
         Assert.Contains("enrollment.\"ModelName\" = @modelName", sql, StringComparison.Ordinal);
         Assert.Contains("enrollment.\"ModelVersion\" = @modelVersion", sql, StringComparison.Ordinal);
         Assert.Contains("account.\"IsActive\" = TRUE", sql, StringComparison.Ordinal);

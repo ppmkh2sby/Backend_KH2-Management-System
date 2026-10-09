@@ -21,8 +21,18 @@ public sealed class AttendanceDevice : AuditableEntity<Guid>
     public string Name { get; private set; } = string.Empty;
     public string? LocationLabel { get; private set; }
     public string ApiKeyHash { get; private set; } = string.Empty;
+    public int KeyVersion { get; private set; } = 1;
     public bool IsActive { get; private set; }
     public DateTimeOffset? LastSeenAtUtc { get; private set; }
+    public DateTimeOffset? KeyRotatedAtUtc { get; private set; }
+
+    public void RotateKey(string newApiKeyHash, DateTimeOffset now)
+    {
+        ApiKeyHash = Require(newApiKeyHash, nameof(newApiKeyHash));
+        KeyVersion++;
+        KeyRotatedAtUtc = now;
+        Touch(now);
+    }
 
     public void MarkSeen(DateTimeOffset now)
     {

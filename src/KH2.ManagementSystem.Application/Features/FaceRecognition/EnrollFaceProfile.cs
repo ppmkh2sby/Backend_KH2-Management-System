@@ -19,6 +19,10 @@ public sealed class EnrollFaceProfile(IFaceRecognitionService service, IFaceEnro
             return Failure("InvalidSampleCount", "The required enrollment sample count was not supplied.");
         var santriId = await store.FindSantriIdAsync(userId, cancellationToken);
         if (santriId is null) return Failure("SantriNotFound", "A Santri account is required.");
+        var profile = await store.FindProfileAsync(santriId.Value, cancellationToken);
+        if (profile?.Status is FaceProfileStatus.Disabled)
+            return Failure("FaceProfileDisabled", "The face profile is disabled and must be restored through an authorized workflow.");
+
         var results = new List<FaceEmbeddingResult>(images.Count);
         foreach (var image in images)
         {
@@ -32,10 +36,9 @@ public sealed class EnrollFaceProfile(IFaceRecognitionService service, IFaceEnro
             results.Add(embedding);
         }
         var now = clock.UtcNow;
-        var profile = await store.FindProfileAsync(santriId.Value, cancellationToken);
         var isNewProfile = profile is null;
         profile ??= new FaceProfile(Guid.NewGuid(), santriId.Value, now);
-        var enrollment = new FaceEnrollment(Guid.NewGuid(), profile.Id, results[0].ModelName, results[0].ModelVersion, results.Count, now);
+        var enrollment = new FaceEnrollment(Guid.NewGuid(), profile.Id, results[0].ModelName, results[0].ModelVersion, now);
         var embeddings = results.Select((result, index) => new FaceEmbedding(Guid.NewGuid(), enrollment.Id,
             result.Embedding.ToArray(), index + 1, result.QualityScore)).ToArray();
         if (!await store.SaveAsync(profile, isNewProfile, enrollment, embeddings, now, cancellationToken))

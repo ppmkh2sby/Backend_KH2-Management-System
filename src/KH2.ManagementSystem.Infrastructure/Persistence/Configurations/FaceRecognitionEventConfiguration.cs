@@ -11,6 +11,9 @@ public sealed class FaceRecognitionEventConfiguration : IEntityTypeConfiguration
         builder.ToTable("FaceRecognitionEvents");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
+        builder.Property(x => x.Source).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(x => x.RecognitionOutcome).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(x => x.AttendanceOutcome).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(x => x.FailureReason).HasMaxLength(100);
         builder.Property(x => x.ProcessingDurationMs).IsRequired();
         builder.Property(x => x.CreatedAtUtc).IsRequired();

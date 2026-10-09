@@ -9,36 +9,33 @@ public sealed class FaceProfile : AuditableEntity<Guid>
     public FaceProfile(
         Guid id,
         Guid santriId,
-        DateTimeOffset now,
-        string? referenceImagePath = null)
+        DateTimeOffset now)
         : base(id)
     {
         SantriId = santriId != Guid.Empty
             ? santriId
             : throw new ArgumentException("Santri id is required.", nameof(santriId));
-        ReferenceImagePath = NormalizeOptional(referenceImagePath);
         Status = FaceProfileStatus.Pending;
         Touch(now);
     }
 
-    public FaceProfile(Guid id, Guid santriId, string modelName, string modelVersion, DateTimeOffset now, string? referenceImagePath = null)
-        : this(id, santriId, now, referenceImagePath) { }
+    public FaceProfile(Guid id, Guid santriId, string modelName, string modelVersion, DateTimeOffset now)
+        : this(id, santriId, now) { }
 
     public Guid SantriId { get; private set; }
     public FaceProfileStatus Status { get; private set; }
-    public Guid? CurrentEnrollmentId { get; private set; }
-    public string? ReferenceImagePath { get; private set; }
     public DateTimeOffset? LastVerifiedAtUtc { get; private set; }
 
-    public void Activate(Guid enrollmentId, DateTimeOffset now)
+    public void ActivateProfile(DateTimeOffset now)
     {
-        if (enrollmentId == Guid.Empty) throw new ArgumentException("Enrollment id is required.", nameof(enrollmentId));
-        CurrentEnrollmentId = enrollmentId;
+        if (Status is FaceProfileStatus.Disabled)
+        {
+            throw new InvalidOperationException("A disabled face profile must be restored through an authorized workflow before enrollment.");
+        }
+
         Status = FaceProfileStatus.Active;
         Touch(now);
     }
-
-    public void Activate(DateTimeOffset now) => Activate(Guid.NewGuid(), now);
 
     public void UpdateModelVersion(string modelVersion, DateTimeOffset now) => RequireReEnrollment(now);
 
@@ -56,7 +53,7 @@ public sealed class FaceProfile : AuditableEntity<Guid>
 
     public void MarkVerified(DateTimeOffset verifiedAtUtc)
     {
-        if (Status is not FaceProfileStatus.Active || CurrentEnrollmentId is null)
+        if (Status is not FaceProfileStatus.Active)
         {
             throw new InvalidOperationException("Only an active face profile can be verified.");
         }
@@ -64,7 +61,4 @@ public sealed class FaceProfile : AuditableEntity<Guid>
         LastVerifiedAtUtc = verifiedAtUtc;
         Touch(verifiedAtUtc);
     }
-
-    private static string? NormalizeOptional(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -18,8 +18,7 @@ public sealed class FaceEmbedding : AuditableEntity<Guid>
         Guid faceEnrollmentId,
         ReadOnlySpan<float> embedding,
         int captureIndex,
-        float? qualityScore = null,
-        bool isActive = true)
+        float? qualityScore = null)
         : base(id)
     {
         FaceEnrollmentId = faceEnrollmentId != Guid.Empty
@@ -31,12 +30,12 @@ public sealed class FaceEmbedding : AuditableEntity<Guid>
             throw new ArgumentException($"Embedding must contain exactly {RequiredDimensions} dimensions.", nameof(embedding));
         }
 
-        if (captureIndex <= 0)
+        if (captureIndex is < 1 or > 5)
         {
             throw new ArgumentOutOfRangeException(nameof(captureIndex), "Capture index must be positive.");
         }
 
-        if (qualityScore is < 0f or > 1f)
+        if (qualityScore is not null && (!float.IsFinite(qualityScore.Value) || qualityScore is < 0f or > 1f))
         {
             throw new ArgumentOutOfRangeException(nameof(qualityScore), "Quality score must be between 0 and 1.");
         }
@@ -44,14 +43,9 @@ public sealed class FaceEmbedding : AuditableEntity<Guid>
         Embedding = embedding.ToArray();
         CaptureIndex = captureIndex;
         QualityScore = qualityScore;
-        IsActive = isActive;
     }
 
     public Guid FaceEnrollmentId { get; private set; }
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-    public Guid FaceProfileId => FaceEnrollmentId;
     public float? QualityScore { get; private set; }
     public int CaptureIndex { get; private set; }
-    public bool IsActive { get; private set; }
-
 }

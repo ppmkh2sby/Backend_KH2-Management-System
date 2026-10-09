@@ -32,6 +32,7 @@ public static class DependencyInjection
     {
         ArgumentNullException.ThrowIfNull(configuration);
         services.AddFaceRecognitionServiceContracts(configuration);
+        services.AddLegacyFaceProviderContracts(configuration);
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -65,14 +66,6 @@ public static class DependencyInjection
 
         services.AddOptions<DevelopmentAuthorizationOptions>()
             .Bind(configuration.GetSection(DevelopmentAuthorizationOptions.SectionName));
-
-        services.AddOptions<FaceRecognitionOptions>()
-            .Bind(configuration.GetSection(FaceRecognitionOptions.SectionName))
-            .Validate(x => Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out var uri) && !uri.IsLoopback, "FaceRecognition:BaseUrl must be a private service URI.")
-            .Validate(x => x.ServiceApiKey.Trim().Length >= 32, "FaceRecognition:ServiceApiKey must be at least 32 characters.")
-            .Validate(x => x.ConfidenceThreshold is > 0m and <= 1m, "FaceRecognition:ConfidenceThreshold must be between 0 and 1.")
-            .Validate(x => x.TimeoutSeconds is > 0 and <= 60, "FaceRecognition:TimeoutSeconds must be between 1 and 60.")
-            .ValidateOnStart();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -118,15 +111,6 @@ public static class DependencyInjection
         services.AddScoped<IEmailVerificationCodeService, EmailVerificationCodeService>();
         services.AddScoped<MasterAccountSeeder>();
         services.AddSingleton<IClock, SystemClock>();
-        services.AddSingleton<IFaceCaptureStorage, LocalPrivateFaceCaptureStorage>();
-        services.AddHttpClient<IFaceRecognitionClient, HttpFaceRecognitionClient>((serviceProvider, client) =>
-        {
-            var faceOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<FaceRecognitionOptions>>().Value;
-            client.BaseAddress = new Uri(faceOptions.BaseUrl, UriKind.Absolute);
-            client.Timeout = TimeSpan.FromSeconds(faceOptions.TimeoutSeconds);
-            client.DefaultRequestHeaders.Add("X-Face-Service-Key", faceOptions.ServiceApiKey);
-        });
-
         return services;
     }
 }

@@ -84,7 +84,7 @@ public sealed class FaceFoundationRelationalTests
         new(Guid.NewGuid(), santriId, "arcface", "1", DateTimeOffset.UtcNow);
 
     private static FaceEnrollment NewEnrollment(Guid profileId) =>
-        new(Guid.NewGuid(), profileId, "arcface", "1", 5, DateTimeOffset.UtcNow);
+        new(Guid.NewGuid(), profileId, "arcface", "1", DateTimeOffset.UtcNow);
 
     [Fact]
     public void FailedEmbeddingInsertRollsBackTheWholeEnrollment()

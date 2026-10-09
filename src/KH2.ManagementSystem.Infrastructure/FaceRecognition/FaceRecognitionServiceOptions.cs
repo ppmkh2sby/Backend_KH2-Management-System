@@ -4,7 +4,6 @@ public sealed class FaceRecognitionServiceOptions
 {
     public const string SectionName = "FaceRecognition";
     public string BaseUrl { get; set; } = string.Empty;
-    public string? AnalysisBaseUrl { get; set; }
     public string ApiKey { get; set; } = string.Empty;
     public int TimeoutSeconds { get; set; } = 15;
     // No production default. Calibrate cosine similarity using KH2 validation data.

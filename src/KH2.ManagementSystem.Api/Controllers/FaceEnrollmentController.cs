@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using KH2.ManagementSystem.Api.Infrastructure;
 using KH2.ManagementSystem.Api.Contracts.FaceRecognition;
 using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
 using KH2.ManagementSystem.Application.Abstractions.Time;
@@ -16,6 +17,7 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Santri,DewanGuru")]
 [EnableRateLimiting("FaceRecognition")]
+[ServiceFilter(typeof(LegacyFaceApiGateFilter))]
 [Route("api/v1/face-enrollment/me")]
 public sealed class FaceEnrollmentController(
     AppDbContext dbContext,

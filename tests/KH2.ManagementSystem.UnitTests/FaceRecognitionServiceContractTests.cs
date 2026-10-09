@@ -21,10 +21,10 @@ public sealed class FaceRecognitionServiceContractTests
     }
 
     [Fact]
-    public void AnalysisServiceCanUseASeparateUrlFromLegacyClient()
+    public void CanonicalServiceUsesOnlyTheCanonicalBaseUrl()
     {
-        using var provider = CreateProvider("FaceRecognition:AnalysisBaseUrl", "http://127.0.0.1:8010/");
-        Assert.Equal("http://127.0.0.1:8010/", provider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value.BaseUrl);
+        using var provider = CreateProvider("LegacyFaceProvider:BaseUrl", "http://legacy.internal/");
+        Assert.Equal("http://face.internal/", provider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value.BaseUrl);
     }
 
     [Theory]
@@ -46,19 +46,52 @@ public sealed class FaceRecognitionServiceContractTests
     }
 
     [Fact]
-    public void EnvironmentKeyOverridesSectionKeyAndLegacyKeyIsSupported()
+    public void CanonicalOptionsDoNotReadLegacyProviderSettings()
     {
-        var environmentKey = new string('e', 32);
-        using var provider = CreateProvider("FACE_SERVICE_API_KEY", environmentKey);
-        Assert.Equal(environmentKey, provider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value.ApiKey);
-
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["FaceRecognition:BaseUrl"] = "http://face.internal/",
-            ["FaceRecognition:ServiceApiKey"] = new string('l', 32)
+            ["LegacyFaceProvider:ApiKey"] = new string('l', 32)
         }).Build();
-        using var legacyProvider = new ServiceCollection().AddFaceRecognitionServiceContracts(config).BuildServiceProvider();
-        Assert.Equal(new string('l', 32), legacyProvider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value.ApiKey);
+        using var provider = new ServiceCollection().AddFaceRecognitionServiceContracts(config).BuildServiceProvider();
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value);
+    }
+
+    [Fact]
+    public void LegacyProviderOptionsBindOnlyFromLegacyFaceProvider()
+    {
+        var apiKey = new string('l', 32);
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["LegacyFaceProvider:BaseUrl"] = "http://legacy.internal/",
+            ["LegacyFaceProvider:ApiKey"] = apiKey,
+            ["LegacyFaceProvider:ConfidenceThreshold"] = "0.75",
+            ["LegacyFaceProvider:TimeoutSeconds"] = "12",
+            ["LegacyFaceProvider:CaptureStoragePath"] = "private-captures"
+        }).Build();
+        using var provider = new ServiceCollection().AddLegacyFaceProviderContracts(config).BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<LegacyFaceProviderOptions>>().Value;
+
+        Assert.Equal("http://legacy.internal/", options.BaseUrl);
+        Assert.Equal(apiKey, options.ApiKey);
+        Assert.Equal(0.75m, options.ConfidenceThreshold);
+        Assert.Equal(12, options.TimeoutSeconds);
+        Assert.Equal("private-captures", options.CaptureStoragePath);
+        Assert.IsType<LocalPrivateFaceCaptureStorage>(provider.GetRequiredService<IFaceCaptureStorage>());
+    }
+
+    [Fact]
+    public void OptionModelsHaveNonOverlappingResponsibilities()
+    {
+        var canonicalFields = typeof(FaceRecognitionServiceOptions).GetProperties().Select(property => property.Name).ToArray();
+        var legacyFields = typeof(LegacyFaceProviderOptions).GetProperties().Select(property => property.Name).ToArray();
+
+        Assert.DoesNotContain("ConfidenceThreshold", canonicalFields);
+        Assert.DoesNotContain("CaptureStoragePath", canonicalFields);
+        Assert.DoesNotContain("SimilarityThreshold", legacyFields);
+        Assert.DoesNotContain("ExpectedEmbeddingDimension", legacyFields);
+        Assert.DoesNotContain("RequiredEnrollmentSamples", legacyFields);
     }
 
     [Theory]

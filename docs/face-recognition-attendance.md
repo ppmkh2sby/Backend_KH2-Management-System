@@ -10,6 +10,15 @@ Layanan AI harus hanya dapat dijangkau dari jaringan internal backend. Konfigura
 {
   "FaceRecognition": {
     "BaseUrl": "http://face-recognition.internal/",
+    "ApiKey": "REPLACE_WITH_A_RANDOM_SECRET_MIN_32_CHARS",
+    "SimilarityThreshold": null,
+    "TimeoutSeconds": 15,
+    "ExpectedEmbeddingDimension": 512,
+    "RequiredEnrollmentSamples": 5
+  },
+  "LegacyFaceProvider": {
+    "BaseUrl": "http://legacy-face-provider.internal/",
+    "ApiKey": "REPLACE_WITH_A_RANDOM_SECRET_MIN_32_CHARS",
     "ConfidenceThreshold": 0.85,
     "TimeoutSeconds": 15,
     "CaptureStoragePath": "/var/lib/kh2/private-face-captures"
@@ -17,9 +26,22 @@ Layanan AI harus hanya dapat dijangkau dari jaringan internal backend. Konfigura
 }
 ```
 
+`FaceRecognition` hanya untuk layanan embedding kanonis (`/v1/analyze` dan
+`/v1/health`). `SimilarityThreshold` adalah ambang cosine-similarity kanonis
+dan tidak setara dengan confidence provider lama; biarkan `null` hingga
+kalibrasi tersedia. `LegacyFaceProvider` hanya untuk route transitional yang
+masih memanggil provider lama, termasuk penyimpanan capture staged.
+
+Migrasi deployment yang sebelumnya memakai field legacy di `FaceRecognition`
+harus memindahkan `BaseUrl`, `ServiceApiKey` (menjadi `ApiKey`),
+`ConfidenceThreshold`, `TimeoutSeconds`, dan `CaptureStoragePath` ke
+`LegacyFaceProvider`. Tidak ada fallback otomatis ke field lama.
+
 Kontrak internal AI yang dipanggil backend adalah `POST v1/enrollment/validate-capture`, `POST v1/enrollment`, `POST v1/attendance/verify-opener`, `POST v1/attendance/recognize`, dan `DELETE v1/enrollment/{providerProfileId}`. AI mengembalikan `santriId` GUID, tidak pernah nama santri, pada recognition. Jika layanan tidak dapat dijangkau, API mengembalikan `503`; tidak ada presensi otomatis yang dibuat.
 
-Foto capture disimpan di private storage lokal yang dikonfigurasi dan PostgreSQL hanya menyimpan storage key, content type, dan metadata. Gunakan volume yang private/terenkripsi pada deployment. Endpoint API tidak pernah mengirim embedding maupun storage key.
+Enrollment kanonis tidak menyimpan lima foto capture di server. Klien menahan capture sementara di memori, kemudian mengirim tepat lima foto sekaligus ke endpoint kanonis. Endpoint API tidak pernah mengirim embedding maupun storage key.
+
+> **Deprecation:** workflow staged pada `/api/v1/face-enrollment/me` bersifat transisional untuk client lama. Client baru wajib menggunakan `POST /api/v1/face-profiles/me/enrollment`; jangan membangun integrasi baru pada endpoint staged atau server-side capture storage.
 
 ## Endpoint
 
@@ -27,6 +49,7 @@ Semua endpoint memerlukan JWT Bearer token.
 
 | Endpoint | Hak akses | Keterangan |
 | --- | --- | --- |
+| `POST /api/v1/face-profiles/me/enrollment` | Santri | **Canonical.** `multipart/form-data` dengan tepat lima file `photos`; semua capture dikirim dalam satu request. |
 | `GET /api/v1/face-enrollment/me` | Santri | Status `belum-terdaftar`, `proses`, `terdaftar`, atau `ditolak`; juga mengembalikan lima panduan pose. |
 | `POST /api/v1/face-enrollment/me/captures` | Santri pemilik | `multipart/form-data`: `captureOrder` (1-5) dan `photo`. Urutan pose: lurus, sedikit kiri, sedikit kanan, menengadah, menunduk. |
 | `POST /api/v1/face-enrollment/me/complete` | Santri pemilik | Membuat profil AI hanya jika lima capture valid tersedia. |
@@ -54,16 +77,21 @@ Content-Type: application/json
 }
 ```
 
-Contoh capture ke-1:
+Contoh canonical enrollment:
 
 ```http
-POST /api/v1/face-enrollment/me/captures
+POST /api/v1/face-profiles/me/enrollment
 Authorization: Bearer <jwt>
 Content-Type: multipart/form-data
 
-captureOrder=1
-photo=@lurus.jpg;type=image/jpeg
+photos=@lurus.jpg;type=image/jpeg
+photos=@sedikit-kiri.jpg;type=image/jpeg
+photos=@sedikit-kanan.jpg;type=image/jpeg
+photos=@menengadah.jpg;type=image/jpeg
+photos=@menunduk.jpg;type=image/jpeg
 ```
+
+Client harus menyimpan lima capture hanya di memori sementara, mengizinkan penggantian sebelum submit, dan menghapusnya dari memori setelah sukses atau batal. Jangan menyimpan capture biometrik ke `localStorage` tanpa review keamanan eksplisit.
 
 ## Aturan pencatatan
 

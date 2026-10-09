@@ -39,11 +39,12 @@ defaults as validated enrollment quality or identity thresholds.
 ```
 
 Use a private network if the backend is in another container. Do not expose the
-service through the public frontend. Set the .NET `FaceRecognition:AnalysisBaseUrl`
-(environment `FaceRecognition__AnalysisBaseUrl`) to this service. This override
-keeps the existing `FaceRecognition:BaseUrl` available for the older provider-ID
-service. Set the new service's key through FACE_SERVICE_API_KEY or
-FaceRecognition__ApiKey; the older client continues to use ServiceApiKey.
+service through the public frontend. Set the .NET `FaceRecognition:BaseUrl`
+(environment `FaceRecognition__BaseUrl`) to this service and configure its key
+through `FaceRecognition__ApiKey`. The older provider-ID service is configured
+separately through `LegacyFaceProvider__BaseUrl` and
+`LegacyFaceProvider__ApiKey`; it does not share a configuration section with
+the canonical embedding service.
 
 No model paths or compatible models means health reports unavailable. Invalid API
 key configuration prevents startup. Service errors contain only known failure codes.

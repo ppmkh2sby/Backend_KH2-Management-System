@@ -21,9 +21,7 @@ public sealed class FaceMatchReader(AppDbContext context) : IFaceMatchReader
             INNER JOIN "FaceProfiles" AS profile ON profile."Id" = enrollment."FaceProfileId"
             INNER JOIN "Santris" AS santri ON santri."Id" = profile."SantriId"
             INNER JOIN "Users" AS account ON account."Id" = santri."UserId"
-            WHERE embedding."IsActive" = TRUE
-              AND profile."Status" = @activeStatus
-              AND profile."CurrentEnrollmentId" = enrollment."Id"
+            WHERE profile."Status" = @activeStatus
               AND enrollment."Status" = @activeEnrollmentStatus
               AND enrollment."ModelName" = @modelName
               AND enrollment."ModelVersion" = @modelVersion

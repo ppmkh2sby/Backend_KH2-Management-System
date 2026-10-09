@@ -98,6 +98,9 @@ builder.Services.AddCors(options =>
 
 builder.Services.Configure<ApplicationMetadataOptions>(
     builder.Configuration.GetSection(ApplicationMetadataOptions.SectionName));
+builder.Services.Configure<LegacyFaceApiOptions>(
+    builder.Configuration.GetSection(LegacyFaceApiOptions.SectionName));
+builder.Services.AddScoped<LegacyFaceApiGateFilter>();
 
 builder.Services.AddScoped<IQueryHandler<GetSystemOverviewQuery, Result<SystemOverviewDto>>, GetSystemOverviewQueryHandler>();
 builder.Services.AddScoped<IQueryHandler<GetMySantriDashboardQuery, Result<SantriDashboardDto>>, GetMySantriDashboardQueryHandler>();

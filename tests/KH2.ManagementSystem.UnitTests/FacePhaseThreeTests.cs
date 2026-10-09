@@ -99,7 +99,53 @@ public sealed class FacePhaseThreeTests
         Assert.Equal([1, 2, 3, 4, 5], store.Embeddings!.Select(x => x.CaptureIndex));
         Assert.All(store.Embeddings!, x => Assert.Equal(store.Enrollment!.Id, x.FaceEnrollmentId));
         Assert.DoesNotContain("embedding", JsonSerializer.Serialize(result.Value), StringComparison.OrdinalIgnoreCase);
-        Assert.Null(store.Profile.ReferenceImagePath);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(6)]
+    public async Task EnrollmentRequiresExactlyFiveImages(int imageCount)
+    {
+        var service = new TestService();
+        var result = await new EnrollFaceProfile(service, new TestStore(), new TestClock(), 5)
+            .HandleAsync(Guid.NewGuid(), Images(imageCount), CancellationToken.None);
+
+        Assert.Equal("InvalidSampleCount", result.Error.Code);
+        Assert.Equal(0, service.Calls);
+    }
+
+    [Fact]
+    public async Task DisabledProfileIsRejectedBeforeFaceAnalysisOrPersistence()
+    {
+        var profile = new FaceProfile(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow);
+        profile.Disable(DateTimeOffset.UtcNow);
+        var store = new TestStore { ExistingProfile = profile };
+        var service = new TestService();
+
+        var result = await new EnrollFaceProfile(service, store, new TestClock(), 5)
+            .HandleAsync(Guid.NewGuid(), Images(), CancellationToken.None);
+
+        Assert.Equal("FaceProfileDisabled", result.Error.Code);
+        Assert.Equal(0, service.Calls);
+        Assert.Equal(FaceProfileStatus.Disabled, profile.Status);
+        Assert.Null(store.Enrollment);
+    }
+
+    [Theory]
+    [InlineData(FaceProfileStatus.Active)]
+    [InlineData(FaceProfileStatus.NeedsReEnrollment)]
+    public async Task EligibleExistingProfilesBecomeOrRemainActiveAfterEnrollment(FaceProfileStatus status)
+    {
+        var profile = new FaceProfile(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow);
+        if (status is FaceProfileStatus.Active) profile.ActivateProfile(DateTimeOffset.UtcNow);
+        else profile.RequireReEnrollment(DateTimeOffset.UtcNow);
+        var store = new TestStore { ExistingProfile = profile };
+
+        var result = await new EnrollFaceProfile(new TestService(), store, new TestClock(), 5)
+            .HandleAsync(Guid.NewGuid(), Images(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FaceProfileStatus.Active, profile.Status);
     }
 
     [Theory]
@@ -130,7 +176,7 @@ public sealed class FacePhaseThreeTests
         Assert.Null(store.Profile);
     }
 
-    private static FaceImage[] Images() => Enumerable.Range(1, 5)
+    private static FaceImage[] Images(int count = 5) => Enumerable.Range(1, count)
         .Select(_ => new FaceImage("image.jpg", "image/jpeg", Stream.Null)).ToArray();
     private static float[] Vector() { var values = new float[512]; values[0] = 1; return values; }
     private static HttpResponseMessage JsonResponse(object payload) => new(HttpStatusCode.OK)
@@ -146,6 +192,7 @@ public sealed class FacePhaseThreeTests
     private sealed class TestService : IFaceRecognitionService
     {
         private int calls;
+        public int Calls => calls;
         public int RejectAt { get; init; }
         public bool ChangeModel { get; init; }
         public Task<FaceImageAnalysisResult> AnalyzeImageAsync(FaceImage image, CancellationToken cancellationToken)
@@ -163,16 +210,18 @@ public sealed class FacePhaseThreeTests
         public bool MissingOwner { get; init; }
         public bool Existing { get; init; }
         public bool SaveConflict { get; init; }
+        public FaceProfile? ExistingProfile { get; init; }
         public FaceProfile? Profile { get; private set; }
         public FaceEnrollment? Enrollment { get; private set; }
         public IReadOnlyList<FaceEmbedding>? Embeddings { get; private set; }
         public Task<Guid?> FindSantriIdAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult<Guid?>(MissingOwner ? null : SantriId);
-        public Task<FaceProfile?> FindProfileAsync(Guid santriId, CancellationToken cancellationToken) => Task.FromResult<FaceProfile?>(Existing ? new FaceProfile(Guid.NewGuid(), santriId, DateTimeOffset.UtcNow) : null);
+        public Task<FaceProfile?> FindProfileAsync(Guid santriId, CancellationToken cancellationToken) =>
+            Task.FromResult(ExistingProfile ?? (Existing ? new FaceProfile(Guid.NewGuid(), santriId, DateTimeOffset.UtcNow) : null));
         public Task<bool> SaveAsync(FaceProfile profile, bool isNewProfile, FaceEnrollment enrollment, IReadOnlyList<FaceEmbedding> embeddings, DateTimeOffset now, CancellationToken cancellationToken)
         {
             if (SaveConflict) return Task.FromResult(false);
             enrollment.Activate(now);
-            profile.Activate(enrollment.Id, now);
+            profile.ActivateProfile(now);
             Profile = profile;
             Enrollment = enrollment;
             Embeddings = embeddings;

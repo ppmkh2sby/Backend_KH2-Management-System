@@ -13,11 +13,8 @@ public sealed class FaceProfileConfiguration : IEntityTypeConfiguration<FaceProf
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.SantriId).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
-        builder.Property(x => x.CurrentEnrollmentId);
-        builder.Property(x => x.ReferenceImagePath).HasMaxLength(500);
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.HasIndex(x => x.SantriId).IsUnique();
         builder.HasOne<Domain.Santris.Santri>().WithOne().HasForeignKey<FaceProfile>(x => x.SantriId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<FaceEnrollment>().WithMany().HasForeignKey(x => x.CurrentEnrollmentId).OnDelete(DeleteBehavior.Restrict);
     }
 }

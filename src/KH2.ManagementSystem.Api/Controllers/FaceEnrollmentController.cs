@@ -17,7 +17,7 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Santri,DewanGuru")]
 [EnableRateLimiting("FaceRecognition")]
-[ServiceFilter(typeof(LegacyFaceApiGateFilter))]
+[LegacyFaceApi]
 [Route("api/v1/face-enrollment/me")]
 public sealed class FaceEnrollmentController(
     AppDbContext dbContext,

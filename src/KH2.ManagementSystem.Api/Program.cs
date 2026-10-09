@@ -23,6 +23,7 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedOrigins = GetAllowedOrigins(builder.Configuration);
+var legacyFaceApiEnabled = builder.Configuration.GetValue<bool?>("LegacyFaceApi:Enabled") ?? true;
 
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
@@ -100,7 +101,6 @@ builder.Services.Configure<ApplicationMetadataOptions>(
     builder.Configuration.GetSection(ApplicationMetadataOptions.SectionName));
 builder.Services.Configure<LegacyFaceApiOptions>(
     builder.Configuration.GetSection(LegacyFaceApiOptions.SectionName));
-builder.Services.AddScoped<LegacyFaceApiGateFilter>();
 
 builder.Services.AddScoped<IQueryHandler<GetSystemOverviewQuery, Result<SystemOverviewDto>>, GetSystemOverviewQueryHandler>();
 builder.Services.AddScoped<IQueryHandler<GetMySantriDashboardQuery, Result<SantriDashboardDto>>, GetMySantriDashboardQueryHandler>();
@@ -108,7 +108,7 @@ builder.Services.AddScoped<IQueryHandler<GetMySantriAttendanceQuery, Result<Sant
 builder.Services.AddScoped<IQueryHandler<GetMySantriProgressQuery, Result<SantriDashboardProgressPageDto>>, GetMySantriProgressQueryHandler>();
 builder.Services.AddScoped<IQueryHandler<GetMySantriLogQuery, Result<SantriDashboardLogPageDto>>, GetMySantriLogQueryHandler>();
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, legacyFaceApiEnabled);
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(AuthorizationPolicies.AdminOnly, policy =>
@@ -157,9 +157,11 @@ if (enableHttpsRedirection)
 
 app.UseCors("Frontend");
 
+app.UseRouting();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+app.UseMiddleware<LegacyFaceApiMiddleware>();
 
 app.MapGet("/api/v1/public/santri-total", async (
     AppDbContext dbContext,

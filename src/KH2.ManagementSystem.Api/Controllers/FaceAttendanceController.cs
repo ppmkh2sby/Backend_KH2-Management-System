@@ -22,7 +22,7 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [ApiController]
 [Authorize]
 [EnableRateLimiting("FaceRecognition")]
-[ServiceFilter(typeof(LegacyFaceApiGateFilter))]
+[LegacyFaceApi]
 [Route("api/v1/face-attendance/sessions")]
 public sealed class FaceAttendanceController(
     AppDbContext dbContext,

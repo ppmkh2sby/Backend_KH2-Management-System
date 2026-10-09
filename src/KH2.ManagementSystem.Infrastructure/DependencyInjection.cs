@@ -28,11 +28,15 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        bool legacyFaceApiEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         services.AddFaceRecognitionServiceContracts(configuration);
-        services.AddLegacyFaceProviderContracts(configuration);
+        if (legacyFaceApiEnabled)
+        {
+            services.AddLegacyFaceProviderContracts(configuration);
+        }
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))

@@ -24,7 +24,19 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     DOTNET_RUNNING_IN_CONTAINER=true \
     DOTNET_NOLOGO=true
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 kh2backend \
+    && useradd --system --uid 10001 --gid kh2backend --home-dir /app --no-create-home --shell /usr/sbin/nologin kh2backend
+
 COPY --from=build /app/publish .
+RUN chown -R kh2backend:kh2backend /app
+
+USER kh2backend
+
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health/live"]
 
 ENTRYPOINT ["dotnet", "KH2.ManagementSystem.Api.dll"]

@@ -119,6 +119,12 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTimeOffset?>("KeyRotatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("KeyVersion")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset?>("LastSeenAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -224,9 +230,6 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("FaceEnrollmentId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<float?>("QualityScore")
                         .HasColumnType("real");
 
@@ -235,11 +238,12 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FaceEnrollmentId");
+                    b.HasIndex("FaceEnrollmentId", "CaptureIndex")
+                        .IsUnique();
 
                     b.ToTable("FaceEmbeddings", null, t =>
                         {
-                            t.HasCheckConstraint("CK_FaceEmbeddings_CaptureIndex_Positive", "\"CaptureIndex\" > 0");
+                            t.HasCheckConstraint("CK_FaceEmbeddings_CaptureIndex_Range", "\"CaptureIndex\" >= 1 AND \"CaptureIndex\" <= 5");
 
                             t.HasCheckConstraint("CK_FaceEmbeddings_QualityScore_Range", "\"QualityScore\" IS NULL OR (\"QualityScore\" >= 0 AND \"QualityScore\" <= 1)");
                         });
@@ -249,9 +253,6 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("AcceptedSampleCount")
-                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("ActivatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -274,6 +275,10 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ReferenceImagePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -349,15 +354,8 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("CurrentEnrollmentId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset?>("LastVerifiedAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ReferenceImagePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<Guid>("SantriId")
                         .HasColumnType("uuid");
@@ -372,8 +370,6 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CurrentEnrollmentId");
-
                     b.HasIndex("SantriId")
                         .IsUnique();
 
@@ -384,6 +380,11 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AttendanceOutcome")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -410,8 +411,10 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
                     b.Property<int>("ProcessingDurationMs")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("Recognized")
-                        .HasColumnType("boolean");
+                    b.Property<string>("RecognitionOutcome")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<Guid?>("SantriId")
                         .HasColumnType("uuid");
@@ -421,6 +424,11 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
 
                     b.Property<double?>("Similarity")
                         .HasColumnType("double precision");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1232,11 +1240,6 @@ namespace KH2.ManagementSystem.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("KH2.ManagementSystem.Domain.FaceRecognition.FaceProfile", b =>
                 {
-                    b.HasOne("KH2.ManagementSystem.Domain.FaceRecognition.FaceEnrollment", null)
-                        .WithMany()
-                        .HasForeignKey("CurrentEnrollmentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("KH2.ManagementSystem.Domain.Santris.Santri", null)
                         .WithOne()
                         .HasForeignKey("KH2.ManagementSystem.Domain.FaceRecognition.FaceProfile", "SantriId")

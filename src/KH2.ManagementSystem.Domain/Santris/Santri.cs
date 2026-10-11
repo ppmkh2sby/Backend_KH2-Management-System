@@ -38,6 +38,25 @@ public sealed class Santri : AuditableEntity<Guid>
     public string Kelas { get; private set; } = string.Empty;
     public string? Catatan { get; private set; }
 
+    public void UpdateProfile(
+        string fullName,
+        string kampus,
+        string jurusan,
+        string gender,
+        string tim,
+        string kelas,
+        string? catatan = null)
+    {
+        FullName = Require(fullName, nameof(fullName));
+        Kampus = Require(kampus, nameof(kampus));
+        Jurusan = Require(jurusan, nameof(jurusan));
+        Gender = Require(gender, nameof(gender));
+        Tim = Require(tim, nameof(tim));
+        Kelas = Require(kelas, nameof(kelas));
+        Catatan = catatan?.Trim();
+        Touch(DateTimeOffset.UtcNow);
+    }
+
     private static string Require(string value, string paramName)
     {
         if (string.IsNullOrWhiteSpace(value))

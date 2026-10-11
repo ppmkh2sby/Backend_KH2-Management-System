@@ -134,6 +134,24 @@ public sealed class LegacyFaceApiHostStartupTests
     }
 
     [Fact]
+    public async Task SantriSelfVerifyRequiresAuthenticationAndSantriRole()
+    {
+        using var environment = new TestEnvironment("false");
+        using var factory = new LegacyFaceApiFactory();
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.PostAsync("/api/v1/face-profiles/me/verify", content: null)).StatusCode);
+
+        using var wali = CreateAuthorizedClient(factory, "WaliSantri");
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await wali.PostAsync("/api/v1/face-profiles/me/verify", content: null)).StatusCode);
+
+        using var santri = CreateAuthorizedClient(factory, "Santri");
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await santri.PostAsync("/api/v1/face-profiles/me/verify", content: null)).StatusCode);
+    }
+
+    [Fact]
     public async Task EnabledLegacyApiStartsRegistersLegacyServicesAndPassesRequestsThrough()
     {
         using var environment = new TestEnvironment("true", includeLegacyProvider: true);

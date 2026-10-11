@@ -1,4 +1,5 @@
 using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
+using KH2.ManagementSystem.Application.Features.FaceRecognition;
 using KH2.ManagementSystem.Domain.FaceRecognition;
 using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
@@ -95,6 +96,44 @@ public sealed class PostgreSqlPgvectorIntegrationTests(PostgreSqlIntegrationFixt
         var candidates = await new FaceMatchReader(context).FindNearestAsync(new FaceEmbeddingResult(UnitVector(0), "arcface", "1"), CancellationToken.None);
         var candidate = Assert.Single(candidates);
         Assert.Equal(eligible.Id, candidate.SantriId);
+    }
+
+    [Fact]
+    public async Task SelfVerifyUsesActivePgvectorEmbeddingsAndNeverReturnsAnotherIdentity()
+    {
+        await using var context = await fixture.CreateContextAsync();
+        var (owner, ownerProfile) = await AddActiveProfileAsync(context, "self-verify-owner");
+        var (other, otherProfile) = await AddActiveProfileAsync(context, "self-verify-other");
+        var ownerEnrollment = NewActiveEnrollment(ownerProfile.Id, "arcface", "1");
+        var otherEnrollment = NewActiveEnrollment(otherProfile.Id, "arcface", "1");
+        context.AddRange(ownerEnrollment, otherEnrollment);
+        context.FaceEmbeddings.AddRange(
+            NewEmbedding(ownerEnrollment.Id, UnitVector(0), 1),
+            NewEmbedding(otherEnrollment.Id, UnitVector(1), 1));
+        await context.SaveChangesAsync();
+
+        var store = new FaceEnrollmentStore(context);
+        var reader = new FaceMatchReader(context);
+        var own = new VerifySantriFace(store, new RecognizeFaceImage(new ProbeService(UnitVector(0)), reader, 0.75));
+        var ownResult = await own.HandleAsync(owner.UserId, new FaceImage("probe.jpg", "image/jpeg", Stream.Null));
+        Assert.True(ownResult.Value!.Verified);
+        Assert.Equal(1d, ownResult.Value.Similarity!.Value, 5);
+
+        var otherProbe = new VerifySantriFace(store, new RecognizeFaceImage(new ProbeService(UnitVector(1)), reader, 0.75));
+        var otherResult = await otherProbe.HandleAsync(owner.UserId, new FaceImage("probe.jpg", "image/jpeg", Stream.Null));
+        Assert.False(otherResult.Value!.Verified);
+        Assert.Equal("FaceDoesNotBelongToAccount", otherResult.Value.Reason);
+        Assert.Null(otherResult.Value.Similarity);
+        Assert.DoesNotContain(other.Id.ToString(), System.Text.Json.JsonSerializer.Serialize(otherResult.Value));
+    }
+
+    private sealed class ProbeService(float[] vector) : IFaceRecognitionService
+    {
+        public Task<FaceImageAnalysisResult> AnalyzeImageAsync(FaceImage image, CancellationToken cancellationToken) =>
+            Task.FromResult(FaceImageAnalysisResult.Accepted(new FaceDetectionResult(1),
+                new FaceEmbeddingResult(vector, "arcface", "1")));
+        public Task<FaceServiceHealthResult> HealthCheckAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(FaceServiceHealthResult.Healthy());
     }
 
     private static async Task<Santri> AddCandidateAsync(AppDbContext context, string label, FaceProfileStatus profileStatus,

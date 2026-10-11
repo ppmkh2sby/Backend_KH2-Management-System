@@ -43,6 +43,7 @@ public static class FaceRecognitionServiceRegistration
         services.AddScoped(provider => new RecognizeFaceImage(
             provider.GetRequiredService<IFaceRecognitionService>(), provider.GetRequiredService<IFaceMatchReader>(),
             provider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value.SimilarityThreshold));
+        services.AddScoped<VerifySantriFace>();
         services.AddScoped(provider => new EnrollFaceProfile(
             provider.GetRequiredService<IFaceRecognitionService>(), provider.GetRequiredService<IFaceEnrollmentStore>(),
             provider.GetRequiredService<IClock>(), provider.GetRequiredService<IOptions<FaceRecognitionServiceOptions>>().Value.RequiredEnrollmentSamples));

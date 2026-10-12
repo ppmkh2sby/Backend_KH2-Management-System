@@ -5,6 +5,7 @@ using KH2.ManagementSystem.Domain.Kegiatans;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
 using KH2.ManagementSystem.Domain.Presensis;
 using KH2.ManagementSystem.Domain.ProgressKeilmuans;
+using KH2.ManagementSystem.Domain.Quran;
 using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Sesis;
 using KH2.ManagementSystem.Domain.Users;
@@ -37,30 +38,105 @@ public sealed class MasterAccountSeeder(
                 .ToListAsync(cancellationToken),
             StringComparer.Ordinal);
 
-        await SeedSantrisAsync(Putra(), knownUsernames, knownSantriNis, cancellationToken);
-        await SeedSantrisAsync(Putri(), knownUsernames, knownSantriNis, cancellationToken);
+        var knownUserNames = new HashSet<string>(
+            (await dbContext.Users
+                .AsNoTracking()
+                .Select(x => x.FullName)
+                .ToListAsync(cancellationToken))
+            .Select(NormalizeName),
+            StringComparer.Ordinal);
+
+        var knownSantriNames = new HashSet<string>(
+            (await dbContext.Santris
+                .AsNoTracking()
+                .Select(x => x.FullName)
+                .ToListAsync(cancellationToken))
+            .Select(NormalizeName),
+            StringComparer.Ordinal);
+
+        await SeedSantrisAsync(Putra(), knownUsernames, knownSantriNis, knownUserNames, knownSantriNames, cancellationToken);
+        await SeedSantrisAsync(Putri(), knownUsernames, knownSantriNis, knownUserNames, knownSantriNames, cancellationToken);
         await SeedStaffAsync(Admins(), knownUsernames, cancellationToken);
         await SeedStaffAsync(DewanGuru(), knownUsernames, cancellationToken);
         await SeedStaffAsync(Pengurus(), knownUsernames, cancellationToken);
-        await SeedStaffAsync(WaliSantris(), knownUsernames, cancellationToken);
+        await SeedQuranSurahsAsync(cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await SeedRelatedDataAsync(includeSampleData, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await ValidateWaliRelationsAsync(cancellationToken);
+    }
+
+    private async Task SeedQuranSurahsAsync(CancellationToken cancellationToken)
+    {
+        if (QuranSurahCatalog.All.Count != 114 ||
+            QuranSurahCatalog.All.Sum(x => x.VerseCount) != 6236 ||
+            QuranSurahCatalog.All.Select(x => x.Number).Distinct().Count() != 114)
+        {
+            throw new InvalidOperationException("The Quran surah catalog must contain the 114 surahs and 6,236 verses.");
+        }
+
+        var existingByNumber = await dbContext.QuranSurahs
+            .ToDictionaryAsync(x => x.Number, cancellationToken);
+
+        foreach (var item in QuranSurahCatalog.All)
+        {
+            if (!existingByNumber.TryGetValue(item.Number, out var existing))
+            {
+                await dbContext.QuranSurahs.AddAsync(
+                    new QuranSurah(
+                        Guid.NewGuid(),
+                        item.Number,
+                        item.Name,
+                        item.ArabicName,
+                        item.VerseCount),
+                    cancellationToken);
+                continue;
+            }
+
+            if (existing.Name != item.Name ||
+                existing.ArabicName != item.ArabicName ||
+                existing.VerseCount != item.VerseCount)
+            {
+                existing.UpdateMetadata(
+                    item.Name,
+                    item.ArabicName,
+                    item.VerseCount,
+                    DateTimeOffset.UtcNow);
+            }
+        }
     }
 
     private async Task SeedSantrisAsync(
         IReadOnlyCollection<SantriSeedItem> items,
         HashSet<string> knownUsernames,
         HashSet<string> knownSantriNis,
+        HashSet<string> knownUserNames,
+        HashSet<string> knownSantriNames,
         CancellationToken cancellationToken)
     {
         foreach (var item in items)
         {
+            var existingSantri = dbContext.Santris.Local
+                .FirstOrDefault(x => x.Nis == item.Nis)
+                ?? await dbContext.Santris
+                    .FirstOrDefaultAsync(x => x.Nis == item.Nis, cancellationToken);
+
+            var normalizedName = NormalizeName(item.Name);
+            if (existingSantri is null && knownSantriNames.Contains(normalizedName))
+            {
+                continue;
+            }
+
             var existingUser = dbContext.Users.Local
                 .FirstOrDefault(x => x.Username == item.Nis)
                 ?? await dbContext.Users
                     .FirstOrDefaultAsync(x => x.Username == item.Nis, cancellationToken);
+
+            if (existingUser is null && knownUserNames.Contains(normalizedName))
+            {
+                continue;
+            }
 
             if (existingUser is null && knownUsernames.Add(item.Nis))
             {
@@ -71,6 +147,7 @@ public sealed class MasterAccountSeeder(
 
                 await dbContext.Users.AddAsync(user, cancellationToken);
                 existingUser = user;
+                knownUserNames.Add(normalizedName);
             }
 
             if (existingUser is not null)
@@ -82,7 +159,26 @@ public sealed class MasterAccountSeeder(
                 EnsureSeedPassword(existingUser);
             }
 
-            if (existingUser is null || !knownSantriNis.Add(item.Nis))
+            if (existingUser is null)
+            {
+                continue;
+            }
+
+            if (existingSantri is not null)
+            {
+                existingSantri.UpdateProfile(
+                    item.Name,
+                    item.Kampus,
+                    item.Jurusan,
+                    item.Gender,
+                    item.Tim,
+                    item.Kelas,
+                    item.Catatan);
+                knownSantriNames.Add(normalizedName);
+                continue;
+            }
+
+            if (!knownSantriNis.Add(item.Nis))
             {
                 continue;
             }
@@ -100,8 +196,15 @@ public sealed class MasterAccountSeeder(
                 item.Catatan);
 
             await dbContext.Santris.AddAsync(santri, cancellationToken);
+            knownSantriNames.Add(normalizedName);
         }
     }
+
+    private static string NormalizeName(string name) =>
+        string.Join(' ', name
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .ToUpperInvariant();
 
     private async Task SeedStaffAsync(
         IReadOnlyCollection<StaffSeedItem> items,
@@ -175,50 +278,125 @@ public sealed class MasterAccountSeeder(
         Dictionary<string, Santri> santriByNis,
         CancellationToken cancellationToken)
     {
-        var relationSpecs = new[]
+        foreach (var santri in santriByNis.Values)
         {
-            new { Username = "wali", SantriNis = new[] { "022424008", "022424001" } },
-            new { Username = "wali-putri", SantriNis = new[] { "022424016", "022525003" } }
-        };
+            var waliSantriCode = BuildWaliSantriCode(santri.Nis);
+            var waliUser = await FindOrCreateWaliUserAsync(
+                waliSantriCode,
+                santri.FullName,
+                cancellationToken);
 
-        foreach (var spec in relationSpecs)
-        {
-            var waliUser = await dbContext.Users
-                .FirstOrDefaultAsync(
-                    x => x.Username == spec.Username && x.Role == UserRole.WaliSantri,
-                    cancellationToken);
+            var existing = await dbContext.WaliSantriRelations
+                .FirstOrDefaultAsync(x => x.SantriId == santri.Id, cancellationToken);
 
-            if (waliUser is null)
+            if (existing is null)
             {
-                continue;
-            }
-
-            foreach (var nis in spec.SantriNis)
-            {
-                if (!santriByNis.TryGetValue(nis, out var santri))
-                {
-                    continue;
-                }
-
-                var existing = await dbContext.WaliSantriRelations
-                    .FirstOrDefaultAsync(
-                        x => x.WaliUserId == waliUser.Id && x.SantriId == santri.Id,
-                        cancellationToken);
-
-                if (existing is not null)
-                {
-                    existing.ChangeRelationshipLabel("Orang Tua");
-                    continue;
-                }
-
                 await dbContext.WaliSantriRelations.AddAsync(
                     new WaliSantriRelation(
                         Guid.NewGuid(),
                         waliUser.Id,
                         santri.Id,
-                        "Orang Tua"),
+                        "Orang Tua",
+                        waliSantriCode),
                     cancellationToken);
+                continue;
             }
+
+            existing.AssignTo(waliUser.Id);
+            existing.ChangeRelationshipLabel("Orang Tua");
+            existing.ChangeWaliSantriCode(waliSantriCode);
+        }
+    }
+
+    private async Task<User> FindOrCreateWaliUserAsync(
+        string waliSantriCode,
+        string santriName,
+        CancellationToken cancellationToken)
+    {
+        var existingUser = dbContext.Users.Local
+            .FirstOrDefault(x => x.Username == waliSantriCode)
+            ?? await dbContext.Users
+                .FirstOrDefaultAsync(x => x.Username == waliSantriCode, cancellationToken);
+
+        if (existingUser is not null)
+        {
+            if (existingUser.Role != UserRole.WaliSantri)
+            {
+                throw new InvalidOperationException(
+                    $"Username '{waliSantriCode}' is already used by a non-wali account.");
+            }
+
+            existingUser.Rename($"Wali Santri - {santriName}");
+            existingUser.Activate();
+            existingUser.CompletePasswordChange();
+            EnsureSeedPassword(existingUser);
+            return existingUser;
+        }
+
+        var waliUser = CreateUser(
+            username: waliSantriCode,
+            fullName: $"Wali Santri - {santriName}",
+            role: UserRole.WaliSantri);
+
+        waliUser.CompletePasswordChange();
+        await dbContext.Users.AddAsync(waliUser, cancellationToken);
+        return waliUser;
+    }
+
+    private static string BuildWaliSantriCode(string santriNis)
+    {
+        var normalizedNis = santriNis.Trim();
+
+        if (normalizedNis.Length < 3 || normalizedNis.Any(character => !char.IsDigit(character)))
+        {
+            throw new InvalidOperationException(
+                $"Santri NIS '{santriNis}' must contain at least three digits to build a wali santri code.");
+        }
+
+        return $"354{normalizedNis[2..]}";
+    }
+
+    private async Task ValidateWaliRelationsAsync(CancellationToken cancellationToken)
+    {
+        var mappings = await (
+                from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                join user in dbContext.Users.AsNoTracking() on relation.WaliUserId equals user.Id
+                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                select new
+                {
+                    relation.WaliUserId,
+                    relation.SantriId,
+                    relation.WaliSantriCode,
+                    user.Username,
+                    santri.Nis
+                })
+            .ToListAsync(cancellationToken);
+
+        var hasMissingWali = await dbContext.Santris
+            .AsNoTracking()
+            .AnyAsync(
+                santri => !dbContext.WaliSantriRelations.Any(relation => relation.SantriId == santri.Id),
+                cancellationToken);
+
+        var hasInvalidMapping = mappings.Any(mapping =>
+            !string.Equals(mapping.Username, mapping.WaliSantriCode, StringComparison.Ordinal) ||
+            !string.Equals(
+                mapping.WaliSantriCode,
+                BuildWaliSantriCode(mapping.Nis),
+                StringComparison.Ordinal));
+
+        var hasDuplicateWali = mappings
+            .GroupBy(mapping => mapping.WaliUserId)
+            .Any(group => group.Count() > 1);
+
+        var hasDuplicateSantri = mappings
+            .GroupBy(mapping => mapping.SantriId)
+            .Any(group => group.Count() > 1);
+
+        if (hasMissingWali || hasInvalidMapping || hasDuplicateWali || hasDuplicateSantri)
+        {
+            throw new InvalidOperationException(
+                "Every santri must have exactly one wali account whose username and relation code match the santri NIS.");
         }
     }
 
@@ -537,54 +715,78 @@ public sealed class MasterAccountSeeder(
     private static SantriSeedItem[] Putra() =>
         new[]
         {
-            new SantriSeedItem("ABDULLAH JUWAN DAWAIRA", "022121013", "UNAIR", "Keselamatan dan Kesehatan Kerja", "putra", "PH", "Cepatan"),
+            new SantriSeedItem("ABDULLAH JUWAN DAWIRA", "022121013", "UNAIR", "Keselamatan dan Kesehatan Kerja", "putra", "PH", "Cepatan"),
             new SantriSeedItem("MUHAMMAD FARID FATCHUR", "022222001", "ITS", "Sistem Perkapalan", "putra", "Kebersihan", "Cepatan"),
             new SantriSeedItem("MUHAMMAD FATH RAJIHAN NAFIE", "022222006", "UNAIR", "Matematika", "putra", "Sekben", "Lambatan"),
             new SantriSeedItem("ARDIAS AJI SAPUTRO", "022323002", "ITS", "Teknik Infrastruktur Sipil", "putra", "KBM", "Lambatan"),
             new SantriSeedItem("MUHAMMAD IRSYAD IBRAHIMOVIC", "022323004", "ITS", "Teknik Material dan Metalurgi", "putra", "PH", "Lambatan"),
             new SantriSeedItem("SYAIFUDIN AKBARI ABILUDIN", "022323006", "PPNS", "Manajemen Bisnis", "putra", "Acara", "Pegon"), 
-            new SantriSeedItem("ALWIDA RAHMAT", "022424001", "ITS", "Sistem Informasi", "putra", "KTB", "Lambatan"),
+            new SantriSeedItem("ALWIDA RAHMAT", "022424001", "ITS", "Sistem Informasi", "putra", "PH", "Lambatan"),
             new SantriSeedItem("FAHMI ROSYIDIN AL'ULYA", "022424006", "PENS", "Teknik Informatika", "putra", "Sekben", "Lambatan"),
             new SantriSeedItem("KEISHA ZAFIF FAHREZI", "022424007", "PENS", "Multimedia Broadcast", "putra", "Acara", "Lambatan"),
             new SantriSeedItem("MAESTRO RAFA AGNIYA", "022424008", "PENS", "Teknik Informatika", "putra", "KTB", "Lambatan"),
-            new SantriSeedItem("MUHAMMAD FARREL AL-AQSA", "022424010", "UNAIR", "Fisioterapi", "putra", "Upkpt", "Bacaan"),
+            new SantriSeedItem("MUHAMAD FAREL AL-AQSA", "022424010", "UNAIR", "Fisioterapi", "putra", "UKPPT", "Bacaan"),
             new SantriSeedItem("MUHAMMAD FARIZKY ALFATH MAHARDIAN PUTRA", "022424011", "ITS", "Teknik Sipil", "putra", "KBM", "Pegon"), 
-            new SantriSeedItem("MUHAMMAD SETYO ARFAN IBRAHIM", "022424012", "ITS", "Desain Produk", "putra", "Upkpt", "Bacaan"),
+            new SantriSeedItem("MUHAMAD SETYO ARFAN IBRAHIM", "022424012", "ITS", "Desain Produk", "putra", "UKPPT", "Bacaan"),
             new SantriSeedItem("VIKY KARUNIA PUTRA PRATAMA", "022423017", "PPNS", "Teknik Desain dan Manufaktur", "putra", "Kebersihan", "Lambatan"),
-            new SantriSeedItem("ZAKI AFIF ARIF", "022424019", "ITS", "Teknik Lingkungan", "putra", "KBM", "Bacaan"),
+            new SantriSeedItem("ZAKY AFIFI ARIF", "022424019", "ITS", "Teknik Lingkungan", "putra", "KBM", "Bacaan"),
             new SantriSeedItem("BRILIANT ACHMAD RAMADHAN", "022525004", "ITS", "Teknik Lepas Pantai", "putra", "Kebersihan", "Lambatan"),
-            new SantriSeedItem("DIMAS ADI SANJAYA", "022525005", "Universitas Dr. Soetomo", "Manajemen", "putra", "Upkpt", "Bacaan"),
+            new SantriSeedItem("DIMAS ADI SANJAYA", "022525005", "Universitas Dr. Soetomo", "Manajemen", "putra", "UKPPT", "Bacaan"),
             new SantriSeedItem("FARIS JULDAN", "022525006", "PPNS", "Keselamatan dan Kesehatan Kerja", "putra", "Sekben", "Bacaan"),
             new SantriSeedItem("HANAFI SATRIYO UTOMO SETIAWAN", "022525007", "ITS", "S2 - Teknik Informatika", "putra", "Acara", "Bacaan"),
-            new SantriSeedItem("SOFWAN MIFTAKHUDDIN MAARIF", "022525013", "UNAIR", "Farmasi", "putra", "KTB", "Bacaan"),
-            new SantriSeedItem("MUHAMAD BAEHAQI AL MUJAHIDIN", "022524015", "UNAIR", "Teknologi Hasil Perikanan", "putra", "Acara", "Pegon")
+            new SantriSeedItem("SOFWAN MIFTAKHUDDIN MAARIF", "022525013", "UNAIR", "Farmasi", "putra", "Kebersihan", "Bacaan"),
+            new SantriSeedItem("MUHAMAD BAEHAQI AL MUJAHIDIN", "022524015", "UNAIR", "Teknologi Hasil Perikanan", "putra", "Acara", "Pegon"),
+            new SantriSeedItem("AZKA NAFILATA RISKI", "022626005", "PPNS", "Teknik Desain dan Manufaktur", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("HISYAM IBRAHIMUSA HARIYONO", "022626011", "ITS", "Teknik Elektro", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("ILYASA IZZA WIRA PUTRA", "022626012", "ITS", "Arsitektur", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("MOCHAMMAD RIZKY JAMIL", "022626015", "PPNS", "Teknik Permesinan Kapal", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("MOCH. IKBAR ROSYAD ROMZI", "022626016", "PPNS", "Teknik Kelistrikan Kapal", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("MUHAMMAD ARSROCHLIANT DRESTAYUMNA", "022626017", "ITS", "Teknik Informatika", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("MUHAMMAD FAIZ AKBAR", "022626018", "ITS", "Fisika", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("REIHAN MAULANA", "022626019", "PENS", "Teknologi Rekayasa Internet", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("RENO CATUR", "022626020", "PENS", "Teknologi Rekayasa Keselamatan", "putra", "Umum", "Bacaan"),
+            new SantriSeedItem("ZAKI SHOFAN KHAFILUDIN", "022626024", "ITS", "D-4 Teknologi Rekayasa Konversi Energi", "putra", "Umum", "Bacaan")
         };
 
     private static SantriSeedItem[] Putri() =>
         new[]
         {
-            new SantriSeedItem("TARISSA ADELYA SAFIERA", "022222004", "ITS", "Perencanaan Wilayah dan Kota", "putri", "Acara", "Cepatan"),
             new SantriSeedItem("AISYA WIDYA PRATIWI", "022323001", "UNAIR", "Matematika", "putri", "PH", "Cepatan"),
             new SantriSeedItem("CASEY PALLAS TALITHA HARJANTO", "022323003", "ITS", "Desain Komunikasi Visual", "putri", "Kebersihan", "Lambatan"),
-            new SantriSeedItem("RIZKY KHOIRUNNISA", "022323005", "PENS", "Teknik Telekomunikasi", "putri", "KBM", "Pegon"),
             new SantriSeedItem("AYESHA NAYYARA PUTRI WURYADI", "022424002", "PPNS", "Teknik Perancangan dan Konstruksi Kapal", "putri", "Acara", "Lambatan"),
-            new SantriSeedItem("AZZAHRA JAMALULLAILY MAFZA", "022424003", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "Upkpt", "Lambatan"), 
-            new SantriSeedItem("CHERFINE AN-NISAUL AULIYA ULLA", "022424004", "ITS", "Teknik Sipil", "putri", "KBM", "Lambatan"), 
+            new SantriSeedItem("CHERFINE AN-NISAUL AULIYA ULLA", "022424004", "ITS", "Teknik Sipil", "putri", "KBM", "Lambatan"),
             new SantriSeedItem("DEVEN KARTIKA WIJAYA", "022424005", "ITS", "Arsitektur", "putri", "Kebersihan", "Lambatan"),
             new SantriSeedItem("MARITZA DARA ATHIFA", "022424009", "ITS", "Sistem Informasi", "putri", "Sekben", "Pegon"),
             new SantriSeedItem("NABILA KAYSA ADRISTI", "022424013", "ITS", "Studi Pembangunan", "putri", "Kebersihan", "Cepatan"),
             new SantriSeedItem("RARA ARIMBI GITA ATMODJO", "022424014", "ITS", "Desain Komunikasi Visual", "putri", "PH", "Pegon"),
             new SantriSeedItem("RENATA KEYSHA AZALIA KHORUNNISA", "022424015", "ITS", "Teknik Geofisika", "putri", "Acara", "Lambatan"),
-            new SantriSeedItem("SYAHDINDA SHERLYTA LAURA", "022424016", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "KTB", "Lambatan"),
+            new SantriSeedItem("SYAHDINDA SHERLYTA LAURA", "022424016", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "UKPPT", "Lambatan"),
             new SantriSeedItem("ZAHRA SUCIANA TRI AMMA MARETHA", "022424018", "UNAIR", "Akuntansi", "putri", "Sekben", "Lambatan"),
-            new SantriSeedItem("AMANDA RAMADHANI PUTRI PANGESTI", "022525001", "PENS", "Teknik Informatika", "putri", "Upkpt", "Bacaan"),
-            new SantriSeedItem("AURA RENATA ANASYIYA AZKA", "022525002", "PENS", "Sains Data Terapan", "putri", "Acara", "Bacaan"),
-            new SantriSeedItem("BALQIS SALWA AURELIA AZZAHRA", "022525003", "ITS", "Teknologi Kedokteran", "putri", "KTB", "Bacaan"),
-            new SantriSeedItem("IMELYA URIVARTOUSI", "022525008", "ITS", "Sistem Informasi", "putri", "KTB", "Lambatan"), 
-            new SantriSeedItem("MAYLAVASA ADIVA BILQIS", "022525009", "PENS", "Teknik Elektronika Industri", "putri", "Kebersihan", "Bacaan"), 
+            new SantriSeedItem("AMANDA RAMADHANI PUTRI PANGESTI", "022525001", "PENS", "Teknik Informatika", "putri", "Kebersihan", "Bacaan"),
+            new SantriSeedItem("AURA RENATA ANASIYYA AZKA", "022525002", "PENS", "Sains Data Terapan", "putri", "Acara", "Bacaan"),
+            new SantriSeedItem("BALQIS SALWA AURELIA AZZAHRA", "022525003", "ITS", "Teknologi Kedokteran", "putri", "PH", "Bacaan"),
+            new SantriSeedItem("IMELYA URIVARTOUSI", "022525008", "ITS", "Sistem Informasi", "putri", "KTB", "Lambatan"),
+            new SantriSeedItem("MAYLAVASA ADIVA BILQIS", "022525009", "PENS", "Teknik Elektronika Industri", "putri", "KTB", "Bacaan"),
             new SantriSeedItem("QISTHI KHIROFATI MADINA SENOAJI", "022525010", "PENS", "Teknik Informatika", "putri", "Acara", "Bacaan"), 
             new SantriSeedItem("RASHIDA ZARA FAUZIAH", "022525011", "ITS", "Studi Pembangunan", "putri", "Sekben", "Lambatan"),
-            new SantriSeedItem("SAFA KARINDAH KAHAYA AISHA", "022525012", "UMS", "Farmasi", "putri", "Upkpt", "Bacaan"),
+            new SantriSeedItem("SAFA KARINDAH KAHAYA AISHA", "022525012", "UMS", "Farmasi", "putri", "UKPPT", "Bacaan"),
+            new SantriSeedItem("AIKO PIXELAYANTI AWWALIN", "022626001", "ITS", "Sistem Informasi", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("ALIKA GRESSILDA QONITHINA", "022626002", "ITS", "Teknik Perkapalan", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("ATHAYA AURURA RAFIDA", "022626003", "ITS", "Desain Produk Industri", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("AURORA AGHNIY PRASETYO", "022626004", "PENS", "Teknik Rekayasa Multimedia", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("BEFIL MAYHILDA YESTI", "022626006", "ITS", "Statistika", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("CARRISA AURADIKTA AZZAHRA", "022626007", "PENS", "Teknik Informatika", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("DHEVARA AURELIA EKA PUTRI", "022626008", "UNAIR", "Keperawatan", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("HADDISTI AFIFATIL MAR'ATI", "022626009", "ITS", "Kimia", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("HAMALATA RIZUKI", "022626010", "ITS", "Inovasi Digital", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("KAYSHA RAUNAQDINAN GHAISTA ZAHRA EFFENDI", "022626013", "ITS", "Kimia", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("MIATUN ADIA RAHMA", "022626014", "Universitas Terbuka", "Manajemen", "putri", "Umum", "Cepatan"),
+            new SantriSeedItem("SALSABEEL ALISHA UTOMO", "022626021", "ITS", "Geofisika", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("SHAVNA KAELYN TABINA", "022626022", "ITS", "Sistem Informasi", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("YUSTIN ALFARINA", "022626023", "PPNS", "Kesehatan dan Keselamatan Kerja", "putri", "Umum", "Bacaan"),
+            new SantriSeedItem("TARISSA ADELYA SAFIERA", "022222004", "ITS", "Perencanaan Wilayah dan Kota", "putri", "Acara", "Cepatan"),
+            new SantriSeedItem("RIZKY KHOIRUNNISA", "022323005", "PENS", "Teknik Telekomunikasi", "putri", "KBM", "Pegon"),
+            new SantriSeedItem("AZZAHRA JAMALULLAILY MAFZA", "022424003", "UNAIR", "Bahasa dan Sastra Inggris", "putri", "UKPPT", "Lambatan"),
             new SantriSeedItem("SYARIFAH HUURI FILJANNAH", "022525014", "ITS", "Teknik Kimia", "putri", "KBM", "Bacaan")
         };
 
@@ -610,13 +812,6 @@ public sealed class MasterAccountSeeder(
             new StaffSeedItem("0218354003", "Angga", UserRole.Pengurus),
             new StaffSeedItem("0218354004", "Avan", UserRole.Pengurus),
             new StaffSeedItem("0218354005", "Abdurrahman", UserRole.Pengurus)
-        };
-
-    private static StaffSeedItem[] WaliSantris() =>
-        new[]
-        {
-            new StaffSeedItem("wali", "Wali Santri KH2", UserRole.WaliSantri),
-            new StaffSeedItem("wali-putri", "Wali Santri Putri KH2", UserRole.WaliSantri)
         };
 
     private static string ResolvePresensiStatus(int santriIndex, int sessionIndex)

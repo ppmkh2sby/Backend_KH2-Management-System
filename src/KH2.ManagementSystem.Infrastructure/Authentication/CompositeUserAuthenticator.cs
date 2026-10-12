@@ -1,5 +1,6 @@
 using KH2.ManagementSystem.Application.Abstractions.Authentication;
 using KH2.ManagementSystem.Application.Abstractions.Security;
+using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

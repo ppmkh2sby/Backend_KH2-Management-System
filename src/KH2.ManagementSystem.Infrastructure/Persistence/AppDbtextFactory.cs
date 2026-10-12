@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Pgvector.EntityFrameworkCore;
 
 namespace KH2.ManagementSystem.Infrastructure.Persistence;
 
@@ -11,8 +12,9 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         var connectionString = BuildConfiguration().GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
+        connectionString = PostgreSqlConnectionString.Normalize(connectionString);
 
-        optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.UseNpgsql(connectionString, npgsqlOptions => npgsqlOptions.UseVector());
 
         return new AppDbContext(optionsBuilder.Options);
     }

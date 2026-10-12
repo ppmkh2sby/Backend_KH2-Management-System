@@ -1,0 +1,366 @@
+From f61c4a4cbed178299842ed534c374d129bd02961 Mon Sep 17 00:00:00 2001
+From: maestrorafa05 <130625704+maestrorafa05@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 18:46:25 +0700
+Subject: [PATCH] chore: align staging frontend and runtime deployment
+
+---
+ deploy/staging/.env.example                |  4 +-
+ deploy/staging/docker-compose.staging.yml  | 87 ++++++++++++++++++++--
+ deploy/staging/nginx/default.conf.template | 78 ++++++++++++++++++-
+ 3 files changed, 162 insertions(+), 7 deletions(-)
+
+diff --git a/deploy/staging/.env.example b/deploy/staging/.env.example
+index bb5e137..55a0f0f 100644
+--- a/deploy/staging/.env.example
++++ b/deploy/staging/.env.example
+@@ -4,10 +4,12 @@
+ # Build contexts are resolved from deploy/staging/.
+ FACE_BUILD_CONTEXT=../..
+ BACKEND_BUILD_CONTEXT=../../../Backend_KH2-Management-System
++FRONTEND_BUILD_CONTEXT=../../../FrontEnd_KH2-Management-System
+ 
+ # Public edge. TLS_CERTS_PATH is a host directory containing fullchain.pem and
+ # privkey.pem; it is mounted read-only into the reverse proxy.
+-SERVER_NAME=staging.example.invalid
++SERVER_NAME=api-staging.example.invalid
++FRONTEND_SERVER_NAME=staging.example.invalid
+ TLS_CERTS_PATH=/srv/kh2/staging/tls
+ CORS_ALLOWED_ORIGIN=https://staging.example.invalid
+ 
+diff --git a/deploy/staging/docker-compose.staging.yml b/deploy/staging/docker-compose.staging.yml
+index ff1abd8..6b6b89b 100644
+--- a/deploy/staging/docker-compose.staging.yml
++++ b/deploy/staging/docker-compose.staging.yml
+@@ -4,129 +4,206 @@ services:
+   reverse-proxy:
+     image: nginx:1.27-alpine
+     restart: unless-stopped
++
+     depends_on:
+       backend:
+         condition: service_healthy
++      frontend:
++        condition: service_started
++
+     environment:
+       SERVER_NAME: ${SERVER_NAME:?Set SERVER_NAME in the untracked .env file.}
+-      NGINX_ENVSUBST_FILTER: SERVER_NAME
++      FRONTEND_SERVER_NAME: ${FRONTEND_SERVER_NAME:?Set FRONTEND_SERVER_NAME in the untracked .env file.}
++      NGINX_ENVSUBST_FILTER: "^(SERVER_NAME|FRONTEND_SERVER_NAME)$"
++
+     ports:
+       - "80:80"
+       - "443:443"
++
+     volumes:
+       - type: bind
+         source: ./nginx/default.conf.template
+         target: /etc/nginx/templates/default.conf.template
+         read_only: true
++
+       - type: bind
+         source: ${TLS_CERTS_PATH:?Set TLS_CERTS_PATH in the untracked .env file.}
+         target: /etc/nginx/certs
+         read_only: true
++
+     networks:
+       - public-edge
++
+     mem_limit: 128m
+     cpus: 0.25
++
+     security_opt:
+       - no-new-privileges:true
+ 
++
++  frontend:
++    build:
++      context: ${FRONTEND_BUILD_CONTEXT:?Set FRONTEND_BUILD_CONTEXT in the untracked .env file.}
++      dockerfile: Dockerfile
++
++    image: kh2-frontend:staging
++    restart: unless-stopped
++
++    environment:
++      BACKEND_UPSTREAM: http://backend:8080
++
++    networks:
++      - public-edge
++
++    mem_limit: 256m
++    cpus: 0.25
++
++    security_opt:
++      - no-new-privileges:true
++
++
+   backend:
+     build:
+       context: ${BACKEND_BUILD_CONTEXT:?Set BACKEND_BUILD_CONTEXT in the untracked .env file.}
+       dockerfile: Dockerfile
++
+     image: kh2-backend:staging
+     restart: unless-stopped
++
+     depends_on:
+       postgres:
+         condition: service_healthy
+       face-service:
+         condition: service_healthy
++
+     environment:
+       ASPNETCORE_ENVIRONMENT: Production
+       ASPNETCORE_URLS: http://+:8080
+-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
++
++      ConnectionStrings__DefaultConnection: >-
++        Host=postgres;
++        Port=5432;
++        Database=${POSTGRES_DB};
++        Username=${POSTGRES_USER};
++        Password=${POSTGRES_PASSWORD}
++
+       Jwt__Issuer: ${JWT_ISSUER}
+       Jwt__Audience: ${JWT_AUDIENCE}
+       Jwt__SecretKey: ${JWT_SECRET_KEY}
++
+       Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN}
++
+       ReverseProxy__ForwardLimit: 1
+       ReverseProxy__KnownNetworks__0: 172.30.0.0/24
++
+       FaceRecognition__BaseUrl: ${FACE_SERVICE_BASE_URL}
+       FaceRecognition__ApiKey: ${FACE_SERVICE_API_KEY}
+       FaceRecognition__TimeoutSeconds: ${FACE_SERVICE_TIMEOUT_SECONDS:-15}
+       FaceRecognition__ExpectedEmbeddingDimension: 512
+       FaceRecognition__RequiredEnrollmentSamples: 5
++
+       Database__MigrateOnStartup: "false"
+       Database__SeedOnStartup: "false"
+       Database__SeedSampleDataOnStartup: "false"
++
+       LegacyFaceApi__Enabled: ${LEGACY_FACE_API_ENABLED:-false}
++
+       Https__Enabled: "false"
+-      AllowedHosts: ${SERVER_NAME}
++
++      AllowedHosts: "${SERVER_NAME};${FRONTEND_SERVER_NAME};127.0.0.1;localhost"
++
+     networks:
+       - public-edge
+       - internal-app
++
+     mem_limit: 768m
+     cpus: 0.75
++
+     security_opt:
+       - no-new-privileges:true
+ 
++
+   face-service:
+     build:
+       context: ${FACE_BUILD_CONTEXT:?Set FACE_BUILD_CONTEXT in the untracked .env file.}
+       dockerfile: Dockerfile
++
+     image: kh2-face:staging
+     restart: unless-stopped
++
+     environment:
+       FACE_SERVICE_API_KEY: ${FACE_SERVICE_API_KEY}
++
+       INSIGHTFACE_ROOT: /app/data/insightface
+       INSIGHTFACE_MODEL_PACK: ${INSIGHTFACE_MODEL_PACK}
+       INSIGHTFACE_PROVIDERS: ${INSIGHTFACE_PROVIDERS:-CPUExecutionProvider}
++
+       CANONICAL_MODEL_NAME: ${CANONICAL_MODEL_NAME}
+       CANONICAL_MODEL_VERSION: ${CANONICAL_MODEL_VERSION}
++
+       FACE_MODEL_MODE: ${FACE_MODEL_MODE:-development}
++
+       KH2_PRODUCTION_FACE_MODEL_GATE: ${KH2_PRODUCTION_FACE_MODEL_GATE:-PRODUCTION_FACE_MODEL_NOT_CONFIGURED}
+-      FACE_MAX_CONCURRENCY: 1
++
++      FACE_MAX_CONCURRENCY: 4
++
+     volumes:
+       - type: bind
+         source: ${FACE_MODEL_CACHE_PATH:?Set FACE_MODEL_CACHE_PATH in the untracked .env file.}
+         target: /app/data/insightface
+         read_only: true
++
+     networks:
+       - internal-app
++
+     mem_limit: 3g
+     cpus: 1.0
++
+     security_opt:
+       - no-new-privileges:true
+ 
++
+   postgres:
+     image: pgvector/pgvector:pg16
+     restart: unless-stopped
++
+     environment:
+       POSTGRES_DB: ${POSTGRES_DB}
+       POSTGRES_USER: ${POSTGRES_USER}
+       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
++
+     volumes:
+       - postgres-data:/var/lib/postgresql/data
++
+     healthcheck:
+-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
++      test:
++        - CMD-SHELL
++        - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+       interval: 10s
+       timeout: 5s
+       retries: 10
+       start_period: 20s
++
+     networks:
+       - internal-app
++
+     mem_limit: 1g
+     cpus: 0.5
++
+     security_opt:
+       - no-new-privileges:true
+ 
++
+ networks:
+   public-edge:
+     ipam:
+       config:
+         - subnet: 172.30.0.0/24
++
+   internal-app:
+     internal: true
+ 
++
+ volumes:
+   postgres-data:
+     name: kh2-staging-postgres-data
+diff --git a/deploy/staging/nginx/default.conf.template b/deploy/staging/nginx/default.conf.template
+index 7f5ebf1..fc21d57 100644
+--- a/deploy/staging/nginx/default.conf.template
++++ b/deploy/staging/nginx/default.conf.template
+@@ -1,6 +1,7 @@
+ server {
+     listen 80;
+     listen [::]:80;
++
+     server_name ${SERVER_NAME};
+ 
+     location /.well-known/acme-challenge/ {
+@@ -12,29 +13,104 @@ server {
+     }
+ }
+ 
++
+ server {
+     listen 443 ssl;
+     listen [::]:443 ssl;
++
+     server_name ${SERVER_NAME};
+ 
+     ssl_certificate /etc/nginx/certs/fullchain.pem;
+     ssl_certificate_key /etc/nginx/certs/privkey.pem;
++
+     ssl_protocols TLSv1.2 TLSv1.3;
+     ssl_session_timeout 1d;
+     ssl_session_cache shared:TLS:10m;
+ 
+     client_max_body_size 6m;
++
+     add_header X-Content-Type-Options "nosniff" always;
+     add_header X-Frame-Options "DENY" always;
+     add_header Referrer-Policy "same-origin" always;
+ 
+     location / {
+         proxy_pass http://backend:8080;
++
+         proxy_http_version 1.1;
++
+         proxy_set_header Host $host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+-        proxy_set_header X-Forwarded-Proto $scheme;
++        proxy_set_header X-Forwarded-Proto https;
++
++        proxy_connect_timeout 5s;
++        proxy_send_timeout 30s;
++        proxy_read_timeout 30s;
++    }
++}
++
++
++server {
++    listen 80;
++    listen [::]:80;
++
++    server_name ${FRONTEND_SERVER_NAME};
++
++    location /.well-known/acme-challenge/ {
++        root /var/www/certbot;
++    }
++
++    location / {
++        return 308 https://$host$request_uri;
++    }
++}
++
++
++server {
++    listen 443 ssl;
++    listen [::]:443 ssl;
++
++    server_name ${FRONTEND_SERVER_NAME};
++
++    ssl_certificate /etc/nginx/certs/frontend-fullchain.pem;
++    ssl_certificate_key /etc/nginx/certs/frontend-privkey.pem;
++
++    ssl_protocols TLSv1.2 TLSv1.3;
++    ssl_session_timeout 1d;
++    ssl_session_cache shared:TLS:10m;
++
++    client_max_body_size 6m;
++
++    add_header X-Content-Type-Options "nosniff" always;
++    add_header X-Frame-Options "DENY" always;
++    add_header Referrer-Policy "same-origin" always;
++    add_header Permissions-Policy "camera=(self)" always;
++
++    location /api/ {
++        proxy_pass http://backend:8080;
++
++        proxy_http_version 1.1;
++
++        proxy_set_header Host $host;
++        proxy_set_header X-Real-IP $remote_addr;
++        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
++        proxy_set_header X-Forwarded-Proto https;
++
++        proxy_connect_timeout 5s;
++        proxy_send_timeout 30s;
++        proxy_read_timeout 30s;
++    }
++
++    location / {
++        proxy_pass http://frontend:80;
++
++        proxy_http_version 1.1;
++
++        proxy_set_header Host $host;
++        proxy_set_header X-Real-IP $remote_addr;
++        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
++        proxy_set_header X-Forwarded-Proto https;
++
+         proxy_connect_timeout 5s;
+         proxy_send_timeout 30s;
+         proxy_read_timeout 30s;
+-- 
+2.43.0
+

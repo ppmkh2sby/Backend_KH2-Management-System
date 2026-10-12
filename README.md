@@ -39,7 +39,11 @@ dotnet run --project src/KH2.ManagementSystem.Api
 
 Panduan deployment backend Ubuntu 24.04 + `systemd` + Nginx + PostgreSQL ada di [docs/deployment-backend-ubuntu.md](/d:/project/Backend_KH2-Management-System/docs/deployment-backend-ubuntu.md).
 
+Frontend React/Vite berada di `frontend/`, dibangun menjadi static SPA, dan terhubung ke API melalui `/api/v1`. Panduan build dan deploy Nginx tersedia di [docs/deployment-frontend-ubuntu.md](docs/deployment-frontend-ubuntu.md).
+
 ## Endpoint awal
 
 - `GET /health`
 - `GET /api/v1/system/info`
+
+Dokumentasi Face Recognition Attendance tersedia di [docs/face-recognition-attendance.md](docs/face-recognition-attendance.md).

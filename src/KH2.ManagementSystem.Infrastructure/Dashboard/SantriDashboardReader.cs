@@ -6,6 +6,7 @@ using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriLog;
 using KH2.ManagementSystem.Application.Features.Dashboard.GetMySantriProgress;
 using KH2.ManagementSystem.Domain.Kafarahs;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
+using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -222,6 +223,7 @@ public sealed class SantriDashboardReader(
             .Select(x => new
             {
                 x.Id,
+                x.Username,
                 x.FullName,
                 x.Role,
                 x.EmailConfirmed
@@ -255,43 +257,10 @@ public sealed class SantriDashboardReader(
                 BuildProfile(user.FullName, user.Role, user.EmailConfirmed, ownSantri, "self"));
         }
 
-        var fallbackSantri = await dbContext.Santris
-            .AsNoTracking()
-            .OrderBy(x => x.CreatedAtUtc)
-            .ThenBy(x => x.FullName)
-            .Select(x => new SantriProjection(
-                x.Id,
-                x.FullName,
-                x.Nis,
-                x.Kampus,
-                x.Jurusan,
-                x.Gender,
-                x.Tim,
-                x.Kelas))
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (fallbackSantri is not null)
-        {
-            return new DashboardContext(
-                fallbackSantri.Id,
-                fallbackSantri.Tim,
-                BuildProfile(user.FullName, user.Role, user.EmailConfirmed, fallbackSantri, "fallback"));
-        }
-
-        var stub = new SantriProjection(
-            Guid.Empty,
-            user.FullName,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty);
-
-        return new DashboardContext(
-            Guid.Empty,
-            string.Empty,
-            BuildProfile(user.FullName, user.Role, user.EmailConfirmed, stub, "stub"));
+        // This reader is intentionally self-only. Wali views must select a child explicitly
+        // through a guarded child-scoped endpoint; staff must use staff dashboards. Never
+        // substitute another Santri for accounts without their own profile.
+        return null;
     }
 
     private static SantriDashboardProfileDto BuildProfile(
@@ -478,7 +447,7 @@ public sealed class SantriDashboardReader(
 
     private static bool IsAttendanceManager(DashboardContext context)
     {
-        return string.Equals(context.Tim, "ketertiban", StringComparison.OrdinalIgnoreCase);
+        return SantriTeam.IsKetertiban(context.Tim);
     }
 
     private static bool IsAttendanceIssue(string status)

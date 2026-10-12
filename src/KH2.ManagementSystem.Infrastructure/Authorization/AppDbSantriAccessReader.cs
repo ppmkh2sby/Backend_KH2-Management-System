@@ -40,9 +40,15 @@ public sealed class AppDbSantriAccessReader(
         Guid santriId,
         CancellationToken cancellationToken = default)
     {
-        var isWali = await dbContext.WaliSantriRelations
-            .AsNoTracking()
-            .AnyAsync(x => x.WaliUserId == waliUserId && x.SantriId == santriId, cancellationToken);
+        var isWali = await (
+                from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                join user in dbContext.Users.AsNoTracking() on relation.WaliUserId equals user.Id
+                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                where relation.WaliUserId == waliUserId &&
+                      relation.SantriId == santriId &&
+                      relation.WaliSantriCode == user.Username
+                select relation.Id)
+            .AnyAsync(cancellationToken);
 
         if (isWali)
         {

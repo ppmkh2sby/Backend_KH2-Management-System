@@ -164,10 +164,13 @@ public sealed class SantriController(
             return [];
         }
 
-        return await dbContext.WaliSantriRelations
-            .AsNoTracking()
-            .Where(x => x.WaliUserId == context.UserId)
-            .Select(x => x.SantriId)
+        return await (
+                from relation in dbContext.WaliSantriRelations.AsNoTracking()
+                join user in dbContext.Users.AsNoTracking() on relation.WaliUserId equals user.Id
+                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
+                where relation.WaliUserId == context.UserId &&
+                      relation.WaliSantriCode == user.Username
+                select relation.SantriId)
             .ToListAsync(cancellationToken);
     }
 
@@ -228,8 +231,7 @@ public sealed class SantriController(
             return false;
         }
 
-        return string.Equals(tim, "KTB", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(tim, "ketertiban", StringComparison.OrdinalIgnoreCase);
+        return SantriTeam.IsKetertiban(tim);
     }
 
     private sealed record CurrentUserContext(

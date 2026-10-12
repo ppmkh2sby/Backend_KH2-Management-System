@@ -65,9 +65,10 @@ Prioritas konfigurasi ASP.NET Core tetap berlaku, jadi environment variables aka
 
 Default yang sekarang aman untuk production:
 
-- migration aktif jika `Database__MigrateOnStartup` tidak diubah
-- seeding non-sample tidak aktif kecuali `Database__SeedOnStartup=true`
-- sample data tidak aktif kecuali `Database__SeedSampleDataOnStartup=true`
+- migration dan seeding dinonaktifkan saat startup; jalankan keduanya secara
+  eksplisit dari proses deployment yang ditinjau
+- jangan mengaktifkan `Database__MigrateOnStartup` atau
+  `Database__SeedOnStartup` untuk staging/production
 
 Jika frontend dan backend dilayani dari origin yang sama, `Cors__AllowedOrigins` boleh dibiarkan kosong. Jangan set `*`.
 
@@ -82,10 +83,20 @@ ConnectionStrings__DefaultConnection=Host=127.0.0.1;Port=5432;Database=kh2_manag
 Jwt__Issuer=https://api.example.com
 Jwt__Audience=https://app.example.com
 Jwt__SecretKey=REPLACE_WITH_A_LONG_RANDOM_SECRET_MIN_32_CHARS
-Database__MigrateOnStartup=true
+Database__MigrateOnStartup=false
 Database__SeedOnStartup=false
 Database__SeedSampleDataOnStartup=false
 AllowedHosts=api.example.com
+FaceRecognition__BaseUrl=http://face-recognition.internal/
+FaceRecognition__ApiKey=REPLACE_WITH_A_RANDOM_SECRET_MIN_32_CHARS
+FaceRecognition__TimeoutSeconds=15
+FaceRecognition__ExpectedEmbeddingDimension=512
+FaceRecognition__RequiredEnrollmentSamples=5
+LegacyFaceProvider__BaseUrl=http://legacy-face-provider.internal/
+LegacyFaceProvider__ApiKey=REPLACE_WITH_A_RANDOM_SECRET_MIN_32_CHARS
+LegacyFaceProvider__ConfidenceThreshold=0.60
+LegacyFaceProvider__TimeoutSeconds=15
+LegacyFaceProvider__CaptureStoragePath=/var/lib/kh2/private-face-captures
 ```
 
 Opsional:
@@ -100,6 +111,11 @@ ReverseProxy__ForwardLimit=1
 Catatan:
 
 - `ASPNETCORE_URLS` mengontrol bind host/port Kestrel. Untuk pola Nginx reverse proxy di server yang sama, gunakan loopback seperti `http://127.0.0.1:8080`.
+- `FaceRecognition__SimilarityThreshold` bersifat opsional sampai hasil kalibrasi
+  tersedia. Jangan menggantinya dengan `LegacyFaceProvider__ConfidenceThreshold`.
+- Sebelum deployment, pindahkan field provider lama dari section
+  `FaceRecognition` ke `LegacyFaceProvider`; `ServiceApiKey` lama menjadi
+  `LegacyFaceProvider__ApiKey`. Tidak ada fallback untuk nama lama.
 - Jika connection string berisi karakter spesial dan dimasukkan ke unit `systemd`, gunakan `systemd-escape "<value>"` sebelum menyalinnya.
 
 ## 5. systemd service
@@ -127,7 +143,7 @@ Environment=ConnectionStrings__DefaultConnection=Host=127.0.0.1;Port=5432;Databa
 Environment=Jwt__Issuer=https://api.example.com
 Environment=Jwt__Audience=https://app.example.com
 Environment=Jwt__SecretKey=REPLACE_WITH_A_LONG_RANDOM_SECRET_MIN_32_CHARS
-Environment=Database__MigrateOnStartup=true
+Environment=Database__MigrateOnStartup=false
 Environment=Database__SeedOnStartup=false
 Environment=Database__SeedSampleDataOnStartup=false
 Environment=AllowedHosts=api.example.com
@@ -195,7 +211,9 @@ CREATE ROLE kh2_app WITH LOGIN PASSWORD 'REPLACE_ME';
 CREATE DATABASE kh2_management_system OWNER kh2_app;
 ```
 
-Pastikan connection string production menunjuk ke database ini. Startup backend akan menjalankan migration jika `Database__MigrateOnStartup=true`.
+Pastikan connection string production menunjuk ke database ini. Terapkan migration
+secara eksplisit dalam proses deployment yang ditinjau; jangan mengandalkan startup
+API untuk mengubah database.
 
 ## 8. Checklist verifikasi setelah deploy
 

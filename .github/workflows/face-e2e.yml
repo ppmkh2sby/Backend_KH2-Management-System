@@ -1,0 +1,57 @@
+name: Backend Live Face E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN_LIVE_FACE_E2E to use the approved private biometric fixture runner.
+        required: true
+        type: string
+
+jobs:
+  live-face-e2e:
+    if: github.event.inputs.confirmation == 'RUN_LIVE_FACE_E2E'
+    runs-on: [self-hosted, linux, face-e2e]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK from global.json
+      uses: actions/setup-dotnet@v5
+      with:
+        global-json-file: global.json
+
+    - name: Verify private Live Face E2E prerequisites
+      shell: bash
+      run: |
+        test -n "${KH2_FACE_E2E_FIXTURES_DIR:-}" || { echo "KH2_FACE_E2E_FIXTURES_DIR is required on the trusted runner."; exit 1; }
+        test -d "$KH2_FACE_E2E_FIXTURES_DIR" || { echo "Configured face fixture directory is unavailable."; exit 1; }
+        find "$KH2_FACE_E2E_FIXTURES_DIR" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print -quit | grep -q . || { echo "No approved image fixture was found."; exit 1; }
+        curl --fail --silent --show-error http://127.0.0.1:8000/health > /dev/null
+        docker info > /dev/null
+
+    - name: Restore dependencies with security audit
+      run: dotnet restore KH2.ManagementSystem.slnx
+
+    - name: Build Release
+      run: dotnet build KH2.ManagementSystem.slnx --configuration Release --no-restore
+
+    - name: Run Live Face E2E gate
+      run: >
+        dotnet test KH2.ManagementSystem.slnx --configuration Release --no-build
+        --filter "Category=LiveFaceE2E"
+        --logger "trx;LogFileName=live-face-e2e.trx"
+        --results-directory TestResults
+        --verbosity normal
+
+    - name: Publish Live Face E2E results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: live-face-e2e-test-results
+        path: TestResults/*.trx
+        if-no-files-found: warn

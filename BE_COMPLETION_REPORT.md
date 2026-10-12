@@ -56,3 +56,24 @@ No migration was generated, edited, or applied. No Supabase, staging, or product
 - Run the complete solution test suite, including API contract and negative authorization coverage for every scoped resource, in CI with retained final output.
 - Existing face host E2E tests that require `KH2_FACE_E2E_FIXTURES_DIR` still need explicitly approved local fixtures; this pass did not fabricate fixtures.
 - Do not begin C3 legacy runtime removal. Follow C2 operational cutover: deploy telemetry with legacy enabled, migrate known callers, observe usage, communicate sunset, explicitly disable, observe 410 callers, then obtain approval.
+
+## Gate 1 — backend CI stabilization (2026-10-12)
+
+HEAD audited for this gate: `d5ab3dbfd982f4b1077e5d5f41684d954f01caad` on `agent/face-attendance-deployment`.
+
+The prior GitHub Actions failure was environmental, not an application assertion: `CanonicalFaceHostE2ETests.HostEnrollmentPersistsFiveRealEmbeddingsRollsBackInvalidCaptureAndMatchesProbe` needs approved private image fixtures through `KH2_FACE_E2E_FIXTURES_DIR` and a live Face Service at `127.0.0.1:8000`. The shared Ubuntu PR runner does not provide either prerequisite.
+
+The test is retained and now carries `[Trait("Category", "LiveFaceE2E")]`. Standard CI runs `Category!=LiveFaceE2E`, retaining all 184 non-live tests, including PostgreSQL/pgvector Testcontainers, authorization-negative host tests, mock Face Service contract tests, and Development-only OpenAPI/Scalar tests. The separate `Backend Live Face E2E` workflow is manually dispatched only onto a labelled self-hosted trusted runner; it checks the private fixture directory, Face Service health, and Docker before it runs `Category=LiveFaceE2E`.
+
+Local Gate 1 evidence:
+
+| Command | Status |
+| --- | --- |
+| `dotnet restore KH2.ManagementSystem.slnx` | `LOCAL_PASS` — normal NuGet audit enabled |
+| `dotnet build KH2.ManagementSystem.slnx --configuration Release --no-restore` | `LOCAL_PASS` — 0 warnings, 0 errors |
+| `dotnet test ... --filter "Category!=LiveFaceE2E"` | `LOCAL_PASS` — 184 passed, 0 failed, 0 skipped |
+| `dotnet test ... --filter "Category=LiveFaceE2E"` without fixture | `BLOCKED_EXTERNAL_FIXTURE` — one test fails explicitly with the required fixture-variable message |
+
+GitHub Actions has not been dispatched by this change, therefore `GITHUB_CI_PASS` is not claimed. `STANDARD_CI_GATE` is locally validated but awaits GitHub execution; `LIVE_FACE_E2E_GATE` is blocked pending the approved trusted runner, model, service, and private fixture; `PRODUCTION_APPROVED` remains `NO`.
+
+Graphify evidence: `graphify --help`, `graphify update .` before and after the change, and `graphify explain` for the Live Face E2E and legacy host test nodes all completed. The post-change graph contains 2,421 nodes and 4,678 edges; no application/API/legacy dependency was added by the test trait or workflow split.

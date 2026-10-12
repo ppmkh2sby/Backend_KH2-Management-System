@@ -26,6 +26,7 @@ using Xunit;
 namespace KH2.ManagementSystem.UnitTests;
 
 [Collection(PostgreSqlIntegrationFixtureDefinition.Name)]
+[Trait("Category", "LiveFaceE2E")]
 public sealed class CanonicalFaceHostE2ETests(PostgreSqlIntegrationFixture fixture)
 {
     private const string Key = "kh2-local-face-service-test-key-2026";

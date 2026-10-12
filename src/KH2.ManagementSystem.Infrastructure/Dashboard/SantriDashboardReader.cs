@@ -257,73 +257,10 @@ public sealed class SantriDashboardReader(
                 BuildProfile(user.FullName, user.Role, user.EmailConfirmed, ownSantri, "self"));
         }
 
-        if (user.Role == UserRole.WaliSantri)
-        {
-            var linkedSantri = await (
-                from relation in dbContext.WaliSantriRelations.AsNoTracking()
-                join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
-                where relation.WaliUserId == userId &&
-                      relation.WaliSantriCode == user.Username
-                orderby santri.Nis
-                select new SantriProjection(
-                    santri.Id,
-                    santri.FullName,
-                    santri.Nis,
-                    santri.Kampus,
-                    santri.Jurusan,
-                    santri.Gender,
-                    santri.Tim,
-                    santri.Kelas))
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (linkedSantri is null)
-            {
-                return null;
-            }
-
-            return new DashboardContext(
-                linkedSantri.Id,
-                linkedSantri.Tim,
-                BuildProfile(user.FullName, user.Role, user.EmailConfirmed, linkedSantri, "wali-relation"));
-        }
-
-        var fallbackSantri = await dbContext.Santris
-            .AsNoTracking()
-            .OrderBy(x => x.CreatedAtUtc)
-            .ThenBy(x => x.FullName)
-            .Select(x => new SantriProjection(
-                x.Id,
-                x.FullName,
-                x.Nis,
-                x.Kampus,
-                x.Jurusan,
-                x.Gender,
-                x.Tim,
-                x.Kelas))
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (fallbackSantri is not null)
-        {
-            return new DashboardContext(
-                fallbackSantri.Id,
-                fallbackSantri.Tim,
-                BuildProfile(user.FullName, user.Role, user.EmailConfirmed, fallbackSantri, "fallback"));
-        }
-
-        var stub = new SantriProjection(
-            Guid.Empty,
-            user.FullName,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty);
-
-        return new DashboardContext(
-            Guid.Empty,
-            string.Empty,
-            BuildProfile(user.FullName, user.Role, user.EmailConfirmed, stub, "stub"));
+        // This reader is intentionally self-only. Wali views must select a child explicitly
+        // through a guarded child-scoped endpoint; staff must use staff dashboards. Never
+        // substitute another Santri for accounts without their own profile.
+        return null;
     }
 
     private static SantriDashboardProfileDto BuildProfile(

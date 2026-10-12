@@ -88,22 +88,25 @@ public sealed class ProgressKeilmuanController(
 
         if (context.Role == UserRole.WaliSantri)
         {
-            var firstChildCode = await (
-                    from relation in dbContext.WaliSantriRelations.AsNoTracking()
-                    join user in dbContext.Users.AsNoTracking() on relation.WaliUserId equals user.Id
-                    join santri in dbContext.Santris.AsNoTracking() on relation.SantriId equals santri.Id
-                    where relation.WaliUserId == context.UserId &&
-                          relation.WaliSantriCode == user.Username
-                    select santri.Nis)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (string.IsNullOrWhiteSpace(firstChildCode))
+            if (string.IsNullOrWhiteSpace(request.SantriCode))
             {
-                return MissingWaliRelation();
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Child selection required.",
+                    Detail = "Wali must select one linked child using santriCode.",
+                    Status = StatusCodes.Status400BadRequest
+                });
             }
 
-            var detail = await BuildDetailResponseAsync(context, firstChildCode, cancellationToken);
-            return detail is null ? NotFound() : Ok(detail);
+            var detail = await BuildDetailResponseAsync(context, request.SantriCode, cancellationToken);
+            if (detail is not null)
+            {
+                return Ok(detail);
+            }
+
+            var exists = await dbContext.Santris.AsNoTracking()
+                .AnyAsync(x => x.Nis == request.SantriCode.Trim(), cancellationToken);
+            return exists ? Forbid() : NotFound();
         }
 
         if (context.Role != UserRole.Santri || !context.SantriId.HasValue)

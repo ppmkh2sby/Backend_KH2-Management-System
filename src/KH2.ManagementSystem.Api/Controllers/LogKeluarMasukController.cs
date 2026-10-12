@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using KH2.ManagementSystem.Api.Contracts.LogKeluarMasuk;
+using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Domain.LogKeluarMasuks;
 using KH2.ManagementSystem.Domain.Users;
@@ -16,7 +17,8 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [Route("api/v1/log-keluar-masuk")]
 public sealed class LogKeluarMasukController(
     AppDbContext dbContext,
-    IClock clock)
+    IClock clock,
+    ISantriAccessReader santriAccessReader)
     : ControllerBase
 {
     [HttpGet]
@@ -55,12 +57,15 @@ public sealed class LogKeluarMasukController(
 
         if (!isTeamScope)
         {
-            if (!context.SantriId.HasValue)
+            var scopedSantriId = context.Role == UserRole.WaliSantri
+                ? request.SantriId
+                : context.SantriId;
+            if (!scopedSantriId.HasValue || !await CanReadSantriAsync(context, scopedSantriId.Value, cancellationToken))
             {
                 return ForbiddenLogFeature();
             }
 
-            query = query.Where(x => x.Log.SantriId == context.SantriId.Value);
+            query = query.Where(x => x.Log.SantriId == scopedSantriId.Value);
         }
         else
         {
@@ -138,7 +143,12 @@ public sealed class LogKeluarMasukController(
             return NotFound();
         }
 
-        if (!context.CanViewAll && row.SantriId != context.SantriId)
+        if (!await CanReadSantriAsync(context, row.SantriId, cancellationToken))
+        {
+            return ForbiddenLogFeature();
+        }
+
+        if (context.Role == UserRole.Santri && row.SantriId != context.SantriId)
         {
             return ForbiddenLogFeature();
         }
@@ -380,7 +390,23 @@ public sealed class LogKeluarMasukController(
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool CanAccessLogFeature(CurrentUserContext context) =>
-        context.Role is UserRole.Santri or UserRole.Admin or UserRole.DewanGuru or UserRole.Pengurus;
+        context.Role is UserRole.Santri or UserRole.WaliSantri or UserRole.Admin or UserRole.DewanGuru or UserRole.Pengurus;
+
+    private async Task<bool> CanReadSantriAsync(CurrentUserContext context, Guid santriId, CancellationToken cancellationToken)
+    {
+        if (context.CanViewAll)
+        {
+            return true;
+        }
+
+        if (context.Role == UserRole.Santri)
+        {
+            return context.SantriId == santriId;
+        }
+
+        return context.Role == UserRole.WaliSantri &&
+               await santriAccessReader.IsWaliOfSantriAsync(context.UserId, santriId, cancellationToken);
+    }
 
     private ObjectResult ForbiddenLogFeature() =>
         Problem(

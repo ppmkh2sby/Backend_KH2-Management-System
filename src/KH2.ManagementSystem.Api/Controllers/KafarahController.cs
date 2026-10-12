@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using KH2.ManagementSystem.Api.Contracts.Kafarah;
+using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Domain.Kafarahs;
 using KH2.ManagementSystem.Domain.Santris;
@@ -18,7 +19,8 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [Route("api/v1/ketertiban/kafarah")]
 public sealed class KafarahController(
     AppDbContext dbContext,
-    IClock clock)
+    IClock clock,
+    ISantriAccessReader santriAccessReader)
     : ControllerBase
 {
     [HttpGet]
@@ -35,7 +37,7 @@ public sealed class KafarahController(
             return Unauthorized();
         }
 
-        if (!CanAccessKafarahFeature(context))
+        if (!CanReadKafarah(context))
         {
             return ForbiddenKafarahFeature();
         }
@@ -57,7 +59,20 @@ public sealed class KafarahController(
 
         if (request.SantriId.HasValue)
         {
+            if (!await CanReadSantriAsync(context, request.SantriId.Value, cancellationToken))
+            {
+                return ForbiddenKafarahFeature();
+            }
             query = query.Where(x => x.Kafarah.SantriId == request.SantriId.Value);
+        }
+        else if (!context.IsStaff)
+        {
+            if (!context.SantriId.HasValue)
+            {
+                return ForbiddenKafarahFeature();
+            }
+
+            query = query.Where(x => x.Kafarah.SantriId == context.SantriId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -123,7 +138,7 @@ public sealed class KafarahController(
             return Unauthorized();
         }
 
-        if (!CanAccessKafarahFeature(context))
+        if (!CanReadKafarah(context))
         {
             return ForbiddenKafarahFeature();
         }
@@ -132,6 +147,11 @@ public sealed class KafarahController(
         if (row is null)
         {
             return NotFound();
+        }
+
+        if (!await CanReadSantriAsync(context, row.SantriId, cancellationToken))
+        {
+            return ForbiddenKafarahFeature();
         }
 
         return Ok(MapResponse(row));
@@ -153,7 +173,7 @@ public sealed class KafarahController(
             return Unauthorized();
         }
 
-        if (!CanAccessKafarahFeature(context))
+        if (!CanWriteKafarah(context))
         {
             return ForbiddenKafarahFeature();
         }
@@ -204,7 +224,7 @@ public sealed class KafarahController(
             return Unauthorized();
         }
 
-        if (!CanAccessKafarahFeature(context))
+        if (!CanWriteKafarah(context))
         {
             return ForbiddenKafarahFeature();
         }
@@ -293,7 +313,7 @@ public sealed class KafarahController(
             return Unauthorized();
         }
 
-        if (!CanAccessKafarahFeature(context))
+        if (!CanWriteKafarah(context))
         {
             return ForbiddenKafarahFeature();
         }
@@ -350,7 +370,7 @@ public sealed class KafarahController(
             return Unauthorized();
         }
 
-        if (!CanAccessKafarahFeature(context))
+        if (!CanWriteKafarah(context))
         {
             return ForbiddenKafarahFeature();
         }
@@ -453,8 +473,27 @@ public sealed class KafarahController(
         return tanggal.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
-    private static bool CanAccessKafarahFeature(CurrentUserContext context) =>
+    private static bool CanReadKafarah(CurrentUserContext context) =>
+        context.IsStaff || context.Role is UserRole.Santri or UserRole.WaliSantri;
+
+    private static bool CanWriteKafarah(CurrentUserContext context) =>
         context.Role == UserRole.Santri && context.IsKetertiban;
+
+    private async Task<bool> CanReadSantriAsync(CurrentUserContext context, Guid santriId, CancellationToken cancellationToken)
+    {
+        if (context.IsStaff)
+        {
+            return true;
+        }
+
+        if (context.Role == UserRole.Santri)
+        {
+            return context.SantriId == santriId;
+        }
+
+        return context.Role == UserRole.WaliSantri &&
+               await santriAccessReader.IsWaliOfSantriAsync(context.UserId, santriId, cancellationToken);
+    }
 
     private static bool IsKetertibanTeam(string? tim, UserRole role)
     {
@@ -514,7 +553,9 @@ public sealed class KafarahController(
         UserRole Role,
         Guid? SantriId,
         bool IsKetertiban)
-    ;
+    {
+        public bool IsStaff => Role is UserRole.Admin or UserRole.DewanGuru or UserRole.Pengurus;
+    }
 
     private sealed record KafarahReadRow(
         Guid Id,

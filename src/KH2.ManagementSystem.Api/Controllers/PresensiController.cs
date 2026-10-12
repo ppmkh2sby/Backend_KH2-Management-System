@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using KH2.ManagementSystem.Api.Contracts.Presensi;
+using KH2.ManagementSystem.Application.Abstractions.Authorization;
 using KH2.ManagementSystem.Application.Abstractions.Time;
 using KH2.ManagementSystem.Domain.Kegiatans;
 using KH2.ManagementSystem.Domain.Presensis;
@@ -21,7 +22,8 @@ namespace KH2.ManagementSystem.Api.Controllers;
 [Route("api/v1/kehadiran")]
 public sealed class PresensiController(
     AppDbContext dbContext,
-    IClock clock)
+    IClock clock,
+    ISantriAccessReader santriAccessReader)
     : ControllerBase
 {
     [HttpGet]
@@ -38,7 +40,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanReadAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -68,7 +70,20 @@ public sealed class PresensiController(
 
         if (request.SantriId.HasValue)
         {
+            if (!await CanReadSantriAsync(context, request.SantriId.Value, cancellationToken))
+            {
+                return ForbiddenAttendanceFeature();
+            }
             query = query.Where(x => x.Presensi.SantriId == request.SantriId.Value);
+        }
+        else if (!context.IsStaff)
+        {
+            if (!context.SantriId.HasValue)
+            {
+                return ForbiddenAttendanceFeature();
+            }
+
+            query = query.Where(x => x.Presensi.SantriId == context.SantriId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedStatus))
@@ -157,7 +172,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanReadAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -167,6 +182,11 @@ public sealed class PresensiController(
         if (record is null)
         {
             return NotFound();
+        }
+
+        if (!await CanReadSantriAsync(context, record.SantriId, cancellationToken))
+        {
+            return ForbiddenAttendanceFeature();
         }
 
         return Ok(record);
@@ -187,7 +207,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanReadAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -200,6 +220,16 @@ public sealed class PresensiController(
         var kategori = NormalizeOptionalFilter(request.Kategori);
         var waktu = NormalizeWaktu(request.Waktu);
         var santriQuery = dbContext.Santris.AsNoTracking();
+
+        if (!context.IsStaff)
+        {
+            if (!context.SantriId.HasValue)
+            {
+                return ForbiddenAttendanceFeature();
+            }
+
+            santriQuery = santriQuery.Where(x => x.Id == context.SantriId.Value);
+        }
 
         if (!string.IsNullOrWhiteSpace(gender))
         {
@@ -335,7 +365,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanWriteAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -424,7 +454,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanWriteAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -549,7 +579,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanWriteAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -652,7 +682,7 @@ public sealed class PresensiController(
             return Unauthorized();
         }
 
-        if (!CanAccessAttendanceFeature(context))
+        if (!CanWriteAttendance(context))
         {
             return ForbiddenAttendanceFeature();
         }
@@ -705,9 +735,28 @@ public sealed class PresensiController(
             isKetertiban);
     }
 
-    private static bool CanAccessAttendanceFeature(CurrentUserContext context)
+    private static bool CanReadAttendance(CurrentUserContext context) =>
+        context.IsStaff || context.Role is UserRole.Santri or UserRole.WaliSantri;
+
+    private static bool CanWriteAttendance(CurrentUserContext context)
     {
         return context.Role == UserRole.Santri && context.IsKetertiban;
+    }
+
+    private async Task<bool> CanReadSantriAsync(CurrentUserContext context, Guid santriId, CancellationToken cancellationToken)
+    {
+        if (context.IsStaff)
+        {
+            return true;
+        }
+
+        if (context.Role == UserRole.Santri)
+        {
+            return context.SantriId == santriId;
+        }
+
+        return context.Role == UserRole.WaliSantri &&
+               await santriAccessReader.IsWaliOfSantriAsync(context.UserId, santriId, cancellationToken);
     }
 
     private async Task<Kegiatan> FindOrCreateKegiatanAsync(

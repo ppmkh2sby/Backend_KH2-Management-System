@@ -4,6 +4,8 @@ namespace KH2.ManagementSystem.Api.Contracts.ProgressKeilmuan;
 
 public sealed record ProgressKeilmuanQueryRequest
 {
+    [FromQuery(Name = "santriCode")]
+    public string? SantriCode { get; init; }
     [FromQuery(Name = "category")]
     public string? Category { get; init; }
 

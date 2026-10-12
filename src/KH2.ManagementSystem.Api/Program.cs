@@ -335,6 +335,7 @@ public partial class Program
         "/api/v1/progress-keilmuan/sync",
         "/api/v1/log-keluar-masuk",
         "/api/v1/santri",
+        "/api/v1/wali/me/children",
         "/api/v1/public/santri-total",
         "/api/v1/dashboard/santri/me",
         "/api/v1/dashboard/santri/me/presensi",
@@ -347,6 +348,8 @@ public partial class Program
         "/api/v1/auth/verify-email",
         "/api/v1/auth/logout"
         ,"/api/v1/face-enrollment/me"
+        ,"/api/v1/face-profiles/me/enrollment"
+        ,"/api/v1/face-profiles/me/verify"
         ,"/api/v1/face-attendance/sessions"
         ,"/api/attendance/face-recognition"
     ];

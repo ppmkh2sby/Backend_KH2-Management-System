@@ -1,44 +1,58 @@
 # Backend remediation completion report
 
-## Scope completed
+Date: 2026-10-12
+Working branch / audited HEAD: `agent/face-attendance-deployment` / `c3012dc24df38bc0fcd6fd520d692e4818f6f28f`
 
-Baseline branch/HEAD: `agent/face-attendance-deployment` / `99aab32`. No migration was created or applied and no external, staging, or production system was changed.
+## Completed changes
 
-- Added `GET /api/v1/wali/me/children`, restricted to `WaliSantri`. It returns only persisted relations whose `WaliSantriCode` still agrees with the authenticated account username. A missing or stale relation returns an empty `items` array and is never guessed.
-- Separated Presensi and Kafarah read permissions from existing KTB write permission. Admin, Pengurus, and DewanGuru can monitor all rows; a Santri can read own rows; a Wali must select an authorized linked child. Existing write operations remain KTB Santri only.
-- Added linked-child read behavior for logs using `santriId`; Wali write operations remain denied.
-- Removed the Progress Wali first-child fallback. A Wali must provide an authorized `santriCode`; unauthorized and nonexistent selections remain distinguishable only through existing guarded behavior.
-- Removed dashboard reader fallbacks that could select an arbitrary Santri or return a stub. The `dashboard/santri/me*` reader is self-Santri only; Wali must select a child and use guarded child/read routes.
-- Documented frozen route and role contracts in `docs/BE_API_MATRIX.md` and `docs/BE_ROLE_ACCESS_MATRIX.md`.
+- Preserved the existing Wali-child and role-scoped PostgreSQL queries: Wali only sees code-valid persisted relations; staff can read their allowed management data; Santri remains self-only. Presensi, Kafarah, Progress Keilmuan, and Log Keluar/Masuk retain their valid team write restrictions.
+- Corrected canonical enrollment status: `isEnrolled` is now true only when the caller has an active profile, an active enrollment, and exactly the configured five canonical embedding rows.
+- Preserved self-verification through `RecognizeFaceImage`, Face Service, and pgvector. The endpoint returns no embedding or competing identity and creates no Presensi record.
+- Replaced the vulnerable transitive `Microsoft.OpenApi 2.0.0` with an explicit compatible `Microsoft.OpenApi 2.7.5` reference. Normal NuGet audit now passes; audit was not disabled.
+- Implemented native .NET 10 OpenAPI and Scalar only for `Development`: `/openapi/v1.json` and `/scalar`. They are unmapped outside Development.
+- Set sample Staging/Production configuration to `LegacyFaceApi:Enabled=false`; database migration and seed flags remain false. This is source configuration only—no environment was changed.
+- Added the API contract matrix and Frontend/Face handoff. Legacy C2 behavior remains intact: disabled legacy requests authenticate/authorize first, then receive `410 Gone`/`Deprecation: true` before legacy controller activation.
 
-## Files changed
+## Files changed in this remediation pass
 
-- `src/KH2.ManagementSystem.Api/Controllers/WaliController.cs`
-- `src/KH2.ManagementSystem.Api/Controllers/PresensiController.cs`
-- `src/KH2.ManagementSystem.Api/Controllers/KafarahController.cs`
-- `src/KH2.ManagementSystem.Api/Controllers/LogKeluarMasukController.cs`
-- `src/KH2.ManagementSystem.Api/Controllers/ProgressKeilmuanController.cs`
-- `src/KH2.ManagementSystem.Api/Contracts/LogKeluarMasuk/LogKeluarMasukQueryRequest.cs`
-- `src/KH2.ManagementSystem.Api/Contracts/ProgressKeilmuan/ProgressKeilmuanQueryRequest.cs`
-- `src/KH2.ManagementSystem.Infrastructure/Dashboard/SantriDashboardReader.cs`
+- `src/KH2.ManagementSystem.Api/KH2.ManagementSystem.Api.csproj`
 - `src/KH2.ManagementSystem.Api/Program.cs`
-- `tests/KH2.ManagementSystem.UnitTests/WaliChildrenControllerTests.cs`
-- `docs/BE_API_MATRIX.md`, `docs/BE_ROLE_ACCESS_MATRIX.md`
+- `src/KH2.ManagementSystem.Api/Controllers/SantriFaceProfileController.cs`
+- `src/KH2.ManagementSystem.Api/appsettings.Staging.example.json`
+- `src/KH2.ManagementSystem.Api/appsettings.Production.example.json`
+- `tests/KH2.ManagementSystem.UnitTests/PostgreSqlPgvectorIntegrationTests.cs`
+- `tests/KH2.ManagementSystem.UnitTests/LegacyFaceApiHostStartupTests.cs`
+- `docs/BE_API_MATRIX.md`
+- `docs/agent-handoff/BE_CONTRACT_HANDOFF.md`
+- `BE_COMPLETION_REPORT.md`
 
-## Verification
+## Actual verification
 
-- `dotnet restore KH2.ManagementSystem.slnx -p:NuGetAudit=false`: passed. This was necessary only because the previously restored lock/assets recorded `Microsoft.OpenApi 2.0.0` advisory `NU1903` as an error; no package version was changed.
-- `dotnet build KH2.ManagementSystem.slnx --no-restore`: passed, 0 warnings and 0 errors.
-- `dotnet test ... --filter FullyQualifiedName~WaliChildrenControllerTests`: passed, 1/1. It used a disposable PostgreSQL Testcontainers instance and proves valid Wali links are returned while a stale relation code is excluded.
-- Full `dotnet test` was started after build. The local runner ended without emitting its final test summary, so it is **inconclusive**, not reported as a pass. Full suite must be rerun in CI/local with its complete result retained. Some existing face host E2E tests require `KH2_FACE_E2E_FIXTURES_DIR` and are expected to need an explicit approved local fixture.
+| Command | Result |
+| --- | --- |
+| `dotnet restore KH2.ManagementSystem.slnx` | PASS, normal NuGet audit enabled |
+| `dotnet list KH2.ManagementSystem.slnx package --include-transitive` | PASS; resolved `Microsoft.OpenApi 2.7.5` |
+| `dotnet build src/KH2.ManagementSystem.Api/KH2.ManagementSystem.Api.csproj --no-restore --verbosity:minimal` | PASS, 0 warnings / 0 errors |
+| `dotnet build tests/KH2.ManagementSystem.UnitTests/KH2.ManagementSystem.UnitTests.csproj --no-restore --verbosity:minimal` | PASS, 0 warnings / 0 errors |
+| `dotnet test ... --filter FullyQualifiedName~PostgreSqlPgvectorIntegrationTests` | PASS, 5/5 on disposable PostgreSQL 16 + pgvector Testcontainers |
+| `dotnet test ... --filter FullyQualifiedName~LegacyFaceApiHostStartupTests` | PASS, 10/10; includes 410 gate, auth-negative tests, disabled-startup proof, and Development-only OpenAPI/Scalar proof |
+| `dotnet test KH2.ManagementSystem.slnx --no-build --no-restore` | BLOCKED: 184/185 passed; the only failure requires the absent `KH2_FACE_E2E_FIXTURES_DIR` live-face fixture |
 
-## Remaining risks / release gates
+The full solution build now passes. The complete test suite was executed and its sole failure is an external live-face fixture prerequisite, not an asserted application regression. CI should provide approved fixtures only when running that E2E test and retain the complete log.
 
-- Wali dashboard does not have a new aggregate endpoint; the safe behavior is no arbitrary dashboard result. FE must use the child selector then guarded read routes.
-- The role/read changes need broader host HTTP tests covering each status code and Presensi/Kafarah pagination/recap scopes before application readiness can be granted.
-- Biometric production remains blocked pending model license, threshold calibration, consent/privacy, liveness/manual-fallback approval. This backend change does not enable production biometrics.
-- `APP_READY`: not approved. `BIOMETRIC_READY`: blocked. `PROD_INFRA_READY`: not assessed here. `CUTOVER_APPROVED`: no.
+## Scope and release status
 
-## Later human-approved deployment / rollback
+No migration was generated, edited, or applied. No Supabase, staging, or production database was written; no operational account data was seeded; no deployment or commit was performed.
 
-No schema operation is required for this change. After approval, deploy the immutable application image through staging, run role-negative API tests with synthetic accounts, then promote. Roll back by restoring the prior application image; no database rollback is needed for these source-only changes.
+`APP_READY`: not approved pending complete CI suite and broader HTTP scope coverage.
+
+`BIOMETRIC_READY`: blocked pending model license, threshold calibration, consent/privacy, liveness/manual-fallback review, and explicit approval.
+
+`PROD_INFRA_READY`: not assessed.
+`CUTOVER_APPROVED`: no.
+
+## Remaining blockers / follow-up
+
+- Run the complete solution test suite, including API contract and negative authorization coverage for every scoped resource, in CI with retained final output.
+- Existing face host E2E tests that require `KH2_FACE_E2E_FIXTURES_DIR` still need explicitly approved local fixtures; this pass did not fabricate fixtures.
+- Do not begin C3 legacy runtime removal. Follow C2 operational cutover: deploy telemetry with legacy enabled, migrate known callers, observe usage, communicate sunset, explicitly disable, observe 410 callers, then obtain approval.

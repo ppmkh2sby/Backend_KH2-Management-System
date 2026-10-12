@@ -1,11 +1,15 @@
 using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
 using KH2.ManagementSystem.Application.Features.FaceRecognition;
+using KH2.ManagementSystem.Api.Controllers;
 using KH2.ManagementSystem.Domain.FaceRecognition;
 using KH2.ManagementSystem.Domain.Santris;
 using KH2.ManagementSystem.Domain.Users;
 using KH2.ManagementSystem.Infrastructure.FaceRecognition;
 using KH2.ManagementSystem.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using Xunit;
 
@@ -125,6 +129,55 @@ public sealed class PostgreSqlPgvectorIntegrationTests(PostgreSqlIntegrationFixt
         Assert.Equal("FaceDoesNotBelongToAccount", otherResult.Value.Reason);
         Assert.Null(otherResult.Value.Similarity);
         Assert.DoesNotContain(other.Id.ToString(), System.Text.Json.JsonSerializer.Serialize(otherResult.Value));
+    }
+
+    [Fact]
+    public async Task EnrollmentStatusRequiresExactlyTheConfiguredNumberOfActiveEnrollmentSamples()
+    {
+        await using var context = await fixture.CreateContextAsync();
+        var user = new User(Guid.NewGuid(), "enrollment-status", "Enrollment Status", null, UserRole.Santri, "hash");
+        var santri = new Santri(Guid.NewGuid(), user.Id, "Enrollment Status", "enrollment-status", "A", "B", "M", "A", "A");
+        var profile = new FaceProfile(Guid.NewGuid(), santri.Id, DateTimeOffset.UtcNow);
+        profile.ActivateProfile(DateTimeOffset.UtcNow);
+        var enrollment = NewActiveEnrollment(profile.Id, "arcface", "1");
+        context.AddRange(user, santri, profile, enrollment);
+        context.FaceEmbeddings.AddRange(Enumerable.Range(1, 4)
+            .Select(index => NewEmbedding(enrollment.Id, UnitVector(0), index)));
+        await context.SaveChangesAsync();
+
+        var controller = CreateFaceProfileController(context, user.Id);
+        var incomplete = await controller.GetEnrollment(CancellationToken.None);
+        var incompletePayload = Assert.IsType<MyFaceEnrollmentStatusDto>(
+            Assert.IsType<OkObjectResult>(incomplete.Result).Value);
+        Assert.False(incompletePayload.IsEnrolled);
+        Assert.Equal(4, incompletePayload.SampleCount);
+
+        context.FaceEmbeddings.Add(NewEmbedding(enrollment.Id, UnitVector(0), 5));
+        await context.SaveChangesAsync();
+
+        var complete = await controller.GetEnrollment(CancellationToken.None);
+        var completePayload = Assert.IsType<MyFaceEnrollmentStatusDto>(
+            Assert.IsType<OkObjectResult>(complete.Result).Value);
+        Assert.True(completePayload.IsEnrolled);
+        Assert.Equal(5, completePayload.SampleCount);
+        Assert.Empty(context.Presensis);
+    }
+
+    private static SantriFaceProfileController CreateFaceProfileController(AppDbContext context, Guid userId)
+    {
+        var controller = new SantriFaceProfileController(
+            null!,
+            context,
+            Options.Create(new FaceRecognitionServiceOptions { RequiredEnrollmentSamples = 5 }));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        controller.HttpContext.User = new System.Security.Claims.ClaimsPrincipal(
+            new System.Security.Claims.ClaimsIdentity(
+                [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId.ToString())],
+                "test"));
+        return controller;
     }
 
     private sealed class ProbeService(float[] vector) : IFaceRecognitionService

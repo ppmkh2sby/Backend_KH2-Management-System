@@ -20,13 +20,19 @@ using KH2.ManagementSystem.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedOrigins = GetAllowedOrigins(builder.Configuration);
 var legacyFaceApiEnabled = builder.Configuration.GetValue<bool?>("LegacyFaceApi:Enabled") ?? true;
+var enableOpenApi = builder.Environment.IsDevelopment();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
+if (enableOpenApi)
+{
+    builder.Services.AddOpenApi();
+}
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
@@ -182,7 +188,12 @@ app.MapGet("/", () => Results.Ok(new
     endpoints = Program.RootEndpoints
 }));
 
-app.MapGet("/scalar", () => Results.Redirect("/"));
+if (enableOpenApi)
+{
+    app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
+    app.MapScalarApiReference("/scalar").AllowAnonymous();
+}
+
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {

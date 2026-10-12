@@ -152,6 +152,25 @@ public sealed class LegacyFaceApiHostStartupTests
     }
 
     [Fact]
+    public async Task OpenApiAndScalarAreExposedOnlyInDevelopment()
+    {
+        using (var testingEnvironment = new TestEnvironment("false"))
+        using (var testingFactory = new LegacyFaceApiFactory())
+        using (var testingClient = testingFactory.CreateClient())
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await testingClient.GetAsync("/openapi/v1.json")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await testingClient.GetAsync("/scalar")).StatusCode);
+        }
+
+        using var developmentEnvironment = new TestEnvironment("false", environmentName: "Development");
+        using var developmentFactory = new LegacyFaceApiFactory();
+        using var developmentClient = developmentFactory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.OK, (await developmentClient.GetAsync("/openapi/v1.json")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await developmentClient.GetAsync("/scalar")).StatusCode);
+    }
+
+    [Fact]
     public async Task EnabledLegacyApiStartsRegistersLegacyServicesAndPassesRequestsThrough()
     {
         using var environment = new TestEnvironment("true", includeLegacyProvider: true);
@@ -218,9 +237,9 @@ public sealed class LegacyFaceApiHostStartupTests
         public const string JwtSecret = "testing-jwt-secret-with-at-least-32-characters";
         private readonly Dictionary<string, string?> previous = [];
 
-        public TestEnvironment(string legacyEnabled, bool includeLegacyProvider = false)
+        public TestEnvironment(string legacyEnabled, bool includeLegacyProvider = false, string environmentName = "Testing")
         {
-            Set("ASPNETCORE_ENVIRONMENT", "Testing");
+            Set("ASPNETCORE_ENVIRONMENT", environmentName);
             Set("LegacyFaceApi__Enabled", legacyEnabled);
             Set("Database__MigrateOnStartup", "false");
             Set("Database__SeedOnStartup", "false");

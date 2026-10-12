@@ -510,3 +510,7 @@ $RECYCLE.BIN/
 /services/face-service/.pytest_cache/
 /services/face-service/**/__pycache__/
 /services/face-service/models/
+
+# Local agent instructions and execution prompts (not product/API documentation).
+/docs/*[Aa][Gg][Ee][Nn][Tt]*.md
+/docs/*[Pp][Rr][Oo][Mm][Pp][Tt]*.md

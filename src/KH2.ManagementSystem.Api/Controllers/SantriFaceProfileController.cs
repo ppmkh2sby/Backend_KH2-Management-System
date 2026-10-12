@@ -2,11 +2,13 @@ using System.Security.Claims;
 using KH2.ManagementSystem.Application.Abstractions.FaceRecognition;
 using KH2.ManagementSystem.Application.Features.FaceRecognition;
 using KH2.ManagementSystem.Domain.FaceRecognition;
+using KH2.ManagementSystem.Infrastructure.FaceRecognition;
 using KH2.ManagementSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace KH2.ManagementSystem.Api.Controllers;
 
@@ -16,7 +18,10 @@ public sealed record MyFaceEnrollmentStatusDto(bool IsEnrolled, string? Status =
 [ApiController]
 [Authorize(Roles = "Santri")]
 [Route("api/v1/face-profiles/me")]
-public sealed class SantriFaceProfileController(VerifySantriFace verification, AppDbContext dbContext) : ControllerBase
+public sealed class SantriFaceProfileController(
+    VerifySantriFace verification,
+    AppDbContext dbContext,
+    IOptions<FaceRecognitionServiceOptions> faceRecognitionOptions) : ControllerBase
 {
     [HttpPost("verify")]
     [EnableRateLimiting("FaceRecognition")]
@@ -77,7 +82,8 @@ public sealed class SantriFaceProfileController(VerifySantriFace verification, A
 
         var sampleCount = await dbContext.FaceEmbeddings.AsNoTracking()
             .CountAsync(item => item.FaceEnrollmentId == enrollment.Id, cancellationToken);
-        return Ok(new MyFaceEnrollmentStatusDto(true, profile.Status.ToString(), sampleCount,
+        var isEnrolled = sampleCount == faceRecognitionOptions.Value.RequiredEnrollmentSamples;
+        return Ok(new MyFaceEnrollmentStatusDto(isEnrolled, profile.Status.ToString(), sampleCount,
             enrollment.ModelName, enrollment.ModelVersion, enrollment.EnrolledAtUtc));
     }
 }
